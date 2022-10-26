@@ -39,9 +39,9 @@ class FEM(om.ImplicitComponent):
         y_linspace = np.linspace(0, 1.0, 21)
         mesh_x, mesh_y = np.meshgrid(x_linspace, y_linspace, indexing="ij")
 
-        self.options.declare("mesh_x", default=mesh_x, type=np.ndarray, desc="2D mesh with x coordinates")
-        self.options.declare("mesh_y", default=mesh_y, type=np.ndarray, desc="2D mesh with y coordinates")
-        self.options.declare("conductivity", default=1e3, type=float, desc="Material thermal conductivity")
+        self.options.declare("mesh_x", default=mesh_x, types=np.ndarray, desc="2D mesh with x coordinates")
+        self.options.declare("mesh_y", default=mesh_y, types=np.ndarray, desc="2D mesh with y coordinates")
+        self.options.declare("conductivity", default=1e3, types=float, desc="Material thermal conductivity")
 
     def setup(self):
         self.nx = nx = self.options["mesh_x"].shape[0]
@@ -68,9 +68,27 @@ class FEM(om.ImplicitComponent):
             self.dN_dxi.append(FEM._dN_dxi(xi, eta))
             self.N.append(FEM._N(xi, eta))
 
+        # Stiffness matrix
+        self.K_glob = np.zeros((nx * ny, nx * ny), dtype=float)
+        self.density = np.ones((nx - 1) * (ny - 1))
+        self._update_global_stiffness(self.density)
+
         # Set force vector to zero until user specifies nonzero heats
         self.F_glob = np.zeros((nx * ny, 1), dtype=float)
         self.q = np.zeros((nx - 1, ny - 1))  # temporary matrix to store heat
+    
+    def apply_nonlinear(self, inputs, outputs, residuals):
+        self._update_global_stiffness(inputs["density"])
+        residuals["temp"] = self.K_glob @ outputs["temp"] - self.F_glob.flatten()
+
+    def linearize(self, inputs, outputs, jacobian):
+        self._update_global_stiffness(inputs["density"])
+        jacobian["temp", "temp"] = self.K_glob
+        # TODO: derivative of temperature with respect to density
+    
+    def solve_nonlinear(self, inputs, outputs):
+        self._update_global_stiffness(inputs["density"])
+        outputs["temp"] = np.linalg.solve(self.K_glob, self.F_glob)
 
     def set_element_heat(self, q):
         """
@@ -103,6 +121,70 @@ class FEM(om.ImplicitComponent):
                 idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
 
                 self.F_glob[idx_glob] += self._local_force(i, j, self.q[i, j])
+
+    def set_nodal_temps(self, T):
+        """
+        Specify nodal temperatures to hold constant.
+
+        Parameters
+        ----------
+        T : numpy array (num x-coord x num y-coord)
+            Array with specified nodal temperatures. The temperature of any node where the corresponding
+            entry in T is finite (not infinite or NaN) is set to the value of that entry.
+        """
+        pass
+
+    def get_mesh(self):
+        """
+        Get the mesh coordinates.
+
+        Returns
+        -------
+        numpy array (num x-coord x num y-coord)
+            Matrix of x coordinates
+        numpy array (num x-coord x num y-coord)
+            Matrix of y coordinates
+        """
+        return self.options["mesh_x"], self.options["mesh_y"]
+
+    def _update_global_stiffness(self, density):
+        """
+        Set up the global stiffness matrix and stores it in self.K_glob (overwrites).
+
+        Parameters
+        ----------
+        density : numpy array
+            Densities of each element, which can remove/add elements to the problem
+            by scaling their thermal conductivity. The shape corresponds to the flattened
+            2D array of elements. By default 1 for every element.
+        """
+        dens_mat = np.reshape(density, (self.nx - 1, self.ny - 1))
+
+        # Because we use meshgrid, all elements are the same size and shape,
+        # and we use the same thermal conductivity throughout. Thus, the local
+        # stiffness matrix is identical for each element.
+        K_loc = self._local_stiffness(0, 0)
+
+        self.K_glob *= 0  # reset global stiffness matrix
+
+        # Loop over each element and put its local stiffness matrix in the global one
+        for i in range(self.nx - 1):
+            for j in range(self.ny - 1):
+                # 2D indices in the mesh of the nodes surrounding the current element
+                idx = np.array(
+                    [
+                        [i, j],
+                        [i + 1, j],
+                        [i + 1, j + 1],
+                        [i, j + 1],
+                    ]
+                )
+
+                # Convert the 2D indices to flattened 1D to determine where in the
+                # unknown vector (and global stiffness matrix) they'd be
+                idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
+
+                self.K_glob[np.ix_(idx_glob, idx_glob)] += dens_mat[i, j] * K_loc
 
     def _local_stiffness(self, i, j):
         """
