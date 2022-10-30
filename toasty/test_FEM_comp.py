@@ -2,7 +2,8 @@ import openmdao.api as om
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-from toasty.FEM_comp import FEM
+# from toasty.FEM_comp import FEM
+from toasty.FEM_comp_sparse import FEM
 
 class Mass(om.ExplicitComponent):
     def initialize(self):
@@ -57,8 +58,8 @@ density = np.ones((nx - 1, ny - 1))
 p.set_val("density", density.flatten())
 
 # p.check_partials()
-# p.run_model()
-p.run_driver()
+p.run_model()
+# p.run_driver()
 
 T = p.get_val("temp").reshape(nx, ny)
 density = p.get_val("density").reshape(nx - 1, ny - 1)
