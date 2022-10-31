@@ -2,28 +2,17 @@ import openmdao.api as om
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-from toasty.FEM_comp import FEM
-from toasty.FEM_comp_sparse import FEM as FEM_sparse
+from toasty.FEM_comp import FEM as FEM_dense
+from toasty import FEM, Mass, gen_mesh, AvgTemp
 import subprocess
 
 cur_dir = os.path.dirname(__file__)
 
-class Mass(om.ExplicitComponent):
-    def initialize(self):
-        self.options.declare("mesh_size", types=tuple, default=(2, 2), desc="Tuple of mesh size in (nx, ny)")
-    
-    def setup(self):
-        nx, ny = self.options["mesh_size"]
-        self.add_input("density", shape=((nx - 1) * (ny - 1),))
-        self.add_output("mass")
-
-        self.declare_partials("mass", "density", val=1.0)
-    
-    def compute(self, inputs, outputs):
-        outputs["mass"] = np.sum(inputs["density"])
-
-
 def callback_plot(x, fname=None):
+    # Only save a plot every 10 major iterations
+    if x["nMajor"] % 10 != 0:
+        return
+
     T = x["funcs"]["fem.temp"].reshape(nx, ny)
     density = x["xuser"]["density"].reshape(nx - 1, ny - 1)
 
@@ -41,73 +30,80 @@ def callback_plot(x, fname=None):
     if fname:
         fig.savefig(fname)
     else:
-        fig.savefig(os.path.join(cur_dir, "opt", f"opt_{x['nMajor']:04d}.png"), dpi=300)
+        fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
-nx = 31
-ny = 31
-x_linspace = np.linspace(0, 1.0, nx)
-y_linspace = np.linspace(0, 1.0, ny)
-mesh_x, mesh_y = np.meshgrid(x_linspace, y_linspace, indexing="ij")
+out_folder = os.path.join(cur_dir, "opt_ks_test")
+
+nx = 4
+ny = 4
+xlim = (0.0, 1.0)
+ylim = xlim
 
 T_set = np.full((nx, ny), np.inf)
-T_set[:, 0] = 200.0
+T_set[[nx // 3, 2 * nx // 3], 0] = 200.0
 
 q = np.zeros((nx - 1, ny - 1), dtype=float)
-q[0, -1] = 2e5 / x_linspace[1]**1.5
-q[nx // 2, -1] = 5e5 / x_linspace[1]**1.5
-q[-1, -1] = 2e5 / x_linspace[1]**1.5
+q[0, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
+q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
+q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
 
 prob = om.Problem()
 
 # Pick if you want dense or sparse
-# fem = prob.model.add_subsystem("fem", FEM(mesh_x=mesh_x, mesh_y=mesh_y, T_set=T_set, q=q), promotes=["*"])
-fem = prob.model.add_subsystem("fem", FEM_sparse(mesh_x=mesh_x, mesh_y=mesh_y, T_set=T_set, q=q), promotes=["*"])
+# fem = prob.model.add_subsystem("fem", FEM_dense(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes=["*"])
+fem = prob.model.add_subsystem("fem", FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes=["*"])
 
-prob.model.add_subsystem("mass", Mass(mesh_size=(nx, ny)), promotes=["*"])
+prob.model.add_subsystem("mass", Mass(num_x=nx, num_y=ny), promotes=["*"])
+prob.model.add_subsystem("element_temp", AvgTemp(num_x=nx, num_y=ny), promotes=["*"])
 
 prob.model.add_objective("mass")
 prob.model.add_design_var("density", lower=1e-6, upper=1.0)
-prob.model.add_constraint("temp", upper=600)
+# prob.model.add_constraint("max_T", upper=600)
 
 prob.model.linear_solver = om.DirectSolver()
 
 prob.driver = om.pyOptSparseDriver(optimizer="SNOPT")
-os.makedirs(os.path.join(cur_dir, "opt"), exist_ok=True)
-prob.driver.hist_file = os.path.join(cur_dir, "opt", "opt.hst")
+os.makedirs(out_folder, exist_ok=True)
+prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
 prob.driver.options["debug_print"] = ["objs"]  # desvars, nl_cons, ln_cons, objs, totals
 prob.driver.opt_settings["Iterations limit"] = 1e7
 prob.driver.opt_settings["Major iterations limit"] = 500
 prob.driver.opt_settings["Major optimality tolerance"] = 1e-6
 prob.driver.opt_settings["Major feasibility tolerance"] = 1e-8
-prob.driver.opt_settings["Print file"] = os.path.join(cur_dir, "opt", "SNOPT_print.out")
-prob.driver.opt_settings["Summary file"] = os.path.join(cur_dir, "opt", "SNOPT_summary.out")
+prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
+prob.driver.opt_settings["Summary file"] = os.path.join(out_folder, "SNOPT_summary.out")
 prob.driver.opt_settings["snSTOP function handle"] = callback_plot
+prob.driver.opt_settings["Hessian"] = "full memory"
 prob.driver.opt_settings["Verify level"] = 0
 
 prob.setup()
 
-# prob.run_model()
-# prob.check_partials()
-prob.run_driver()
+mesh_x, mesh_y = fem.get_mesh()
 
-callback_plot({"funcs": {"fem.temp": prob.get_val("temp")}, "xuser": {"density": prob.get_val("density")}}, fname=os.path.join(cur_dir, "opt", f"opt_final.pdf"))
+prob.set_val("density", np.random.rand((nx - 1) * (ny - 1)))
+
+prob.run_model()
+prob.check_partials(includes=["element_temp"])
+# prob.run_driver()
+
+callback_plot({"funcs": {"fem.temp": prob.get_val("temp")}, "xuser": {"density": prob.get_val("density")}, "nMajor": 0}, fname=os.path.join(out_folder, f"opt_final.pdf"))
 
 # Create video
 subprocess.run(
     [
         "ffmpeg",
         "-framerate",
-        "10",
+        "30",
         "-pattern_type",
         "glob",
         "-i",
-        os.path.join(cur_dir, "opt", f"opt_*.png"),
+        os.path.join(out_folder, f"opt_*.png"),
         "-c:v",
         "libx264",
         "-pix_fmt",
         "yuv420p",
-        os.path.join(cur_dir, "opt", "opt_movie.mp4"),
+        os.path.join(out_folder, "opt_movie.mp4"),
     ]
 )
 
@@ -116,9 +112,9 @@ subprocess.run(
 #     [
 #         "ffmpeg",
 #         "-i",
-#         os.path.join(cur_dir, "opt", "opt_move.mp4"),
+#         os.path.join(out_folder, "opt_move.mp4"),
 #         "-filter:v",
 #         "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
-#         os.path.join(cur_dir, "opt", "opt_movie_smoothed.mp4"),
+#         os.path.join(out_folder, "opt_movie_smoothed.mp4"),
 #     ]
 # )

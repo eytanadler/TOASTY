@@ -25,5 +25,6 @@ setup(
     packages=find_packages(include=["toasty*"]),
     install_requires=[
         "numpy>=1.16",
+        "scipy",
     ],
 )
