@@ -10,13 +10,13 @@ class FEM(om.ImplicitComponent):
     Options
     -------
     mesh_x : numpy array (num x-coord x num y-coord)
-        Structured mesh of x coordinates with a shape (num_x, num_y). Could
-        be made, for example with (the indexing="ij" is important)
+        Structured mesh of x coordinates with a shape (num_x, num_y). EACH ELEMENT
+        MUST BE THE SAME SHAPE AND SIZE. Could be made, for example with (the indexing="ij" is important)
         ``mesh_x, mesh_y = np.meshgrid(x_linspace, y_linspace, indexing="ij")``
         By default from 0 to 1 with 21 nodes.
     mesh_y : numpy array (num x-coord x num y-coord)
-        Structured mesh of y coordinates with a shape (num_x, num_y). Could
-        be made, for example with (the indexing="ij" is important)
+        Structured mesh of y coordinates with a shape (num_x, num_y). EACH ELEMENT
+        MUST BE THE SAME SHAPE AND SIZE. Could be made, for example with (the indexing="ij" is important)
         ``mesh_x, mesh_y = np.meshgrid(x_linspace, y_linspace, indexing="ij")``
         By default from 0 to 1 with 21 nodes.
     T_set : numpy array (num x-coord x num y-coord)
@@ -71,8 +71,8 @@ class FEM(om.ImplicitComponent):
         # Stiffness matrix
         self.sp_rows, self.sp_cols = self._get_sparsity_pattern()
         self.K_glob = None
-        density = np.ones((nx - 1) * (ny - 1))
-        self._update_global_stiffness(density)
+        self.density = np.zeros((nx - 1) * (ny - 1))
+        self._update_global_stiffness(np.ones((nx - 1) * (ny - 1)))
 
         # Set force vector to zero until user specifies nonzero heats
         self.F_glob = np.zeros((nx * ny, 1), dtype=float)
@@ -114,7 +114,7 @@ class FEM(om.ImplicitComponent):
                 # unknown vector (and global stiffness matrix) they'd be
                 idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
 
-                jacobian["temp", "density"][idx_glob, idx_elem] += inputs["density"][idx_elem] * K_loc @ outputs["temp"][idx_glob]
+                jacobian["temp", "density"][idx_glob, idx_elem] += K_loc @ outputs["temp"][idx_glob]
                 idx_elem += 1
 
         # Any temperatures that are specified get a one along the diagonal and zeros otherwise in K
@@ -126,7 +126,7 @@ class FEM(om.ImplicitComponent):
 
     def solve_nonlinear(self, inputs, outputs):
         self._update_global_stiffness(inputs["density"])
-        outputs["temp"] = np.linalg.solve(self.K_glob, self.F_glob)
+        outputs["temp"] = sp.linalg.spsolve(self.K_glob, self.F_glob)
 
     def get_mesh(self):
         """
@@ -155,6 +155,11 @@ class FEM(om.ImplicitComponent):
             If using this function to compute partial derivatives, setting this to True
             will zero out rows where temperatures are specified.
         """
+        if not np.any(self.density != density):
+            return
+
+        self.density[:] = density[:]
+
         nx, ny = (self.nx, self.ny)
         dens_mat = np.reshape(density, (nx - 1, ny - 1))
 
