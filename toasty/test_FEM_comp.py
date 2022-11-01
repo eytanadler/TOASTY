@@ -13,8 +13,8 @@ def callback_plot(x, fname=None):
     if x["nMajor"] % 10 != 0:
         return
 
-    T = x["funcs"]["fem.temp"].reshape(nx, ny)
-    density = x["xuser"]["density"].reshape(nx - 1, ny - 1)
+    T = prob.get_val("temp").reshape(nx, ny)
+    density = prob.get_val("density").reshape(nx - 1, ny - 1)
 
     fig, axs = plt.subplots(2, 1, figsize=(5, 8))
     c = axs[0].contourf(mesh_x, mesh_y, T, 100, cmap="coolwarm")
@@ -33,10 +33,11 @@ def callback_plot(x, fname=None):
         fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
-out_folder = os.path.join(cur_dir, "opt_ks_test")
+out_folder = os.path.join(cur_dir, "opt")
 
-nx = 4
-ny = 4
+nx = 51
+ny = 51
+n_elem = (nx - 1) * (ny - 1)
 xlim = (0.0, 1.0)
 ylim = xlim
 
@@ -55,20 +56,22 @@ prob = om.Problem()
 fem = prob.model.add_subsystem("fem", FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes=["*"])
 
 prob.model.add_subsystem("mass", Mass(num_x=nx, num_y=ny), promotes=["*"])
-prob.model.add_subsystem("element_temp", AvgTemp(num_x=nx, num_y=ny), promotes=["*"])
+# prob.model.add_subsystem("element_avg_temp", AvgTemp(num_x=nx, num_y=ny), promotes=["*"])
+# prob.model.add_subsystem("max_temp", om.KSComp(width=n_elem, rho=50.0), promotes_inputs=[("g", "avg_temp")], promotes_outputs=[("KS", "max_temp")])
+prob.model.add_subsystem("max_temp", om.KSComp(width=nx * ny, rho=50.0), promotes_inputs=[("g", "temp")], promotes_outputs=[("KS", "max_temp")])
 
 prob.model.add_objective("mass")
 prob.model.add_design_var("density", lower=1e-6, upper=1.0)
-# prob.model.add_constraint("max_T", upper=600)
+prob.model.add_constraint("max_temp", upper=600)
 
 prob.model.linear_solver = om.DirectSolver()
 
 prob.driver = om.pyOptSparseDriver(optimizer="SNOPT")
 os.makedirs(out_folder, exist_ok=True)
 prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
-prob.driver.options["debug_print"] = ["objs"]  # desvars, nl_cons, ln_cons, objs, totals
+prob.driver.options["debug_print"] = ["objs", "nl_cons"]  # desvars, nl_cons, ln_cons, objs, totals
 prob.driver.opt_settings["Iterations limit"] = 1e7
-prob.driver.opt_settings["Major iterations limit"] = 500
+prob.driver.opt_settings["Major iterations limit"] = 5000
 prob.driver.opt_settings["Major optimality tolerance"] = 1e-6
 prob.driver.opt_settings["Major feasibility tolerance"] = 1e-8
 prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
@@ -81,12 +84,13 @@ prob.setup()
 
 mesh_x, mesh_y = fem.get_mesh()
 
-prob.set_val("density", np.random.rand((nx - 1) * (ny - 1)))
+# prob.set_val("density", np.random.rand((nx - 1) * (ny - 1)))
 
-prob.run_model()
-prob.check_partials(includes=["element_temp"])
-# prob.run_driver()
+# prob.run_model()
+# prob.check_partials(includes=["element_avg_temp"])
+prob.run_driver()
 
+# om.n2(prob, show_browser=False, outfile=os.path.join(out_folder, "opt_n2.html"))
 callback_plot({"funcs": {"fem.temp": prob.get_val("temp")}, "xuser": {"density": prob.get_val("density")}, "nMajor": 0}, fname=os.path.join(out_folder, f"opt_final.pdf"))
 
 # Create video
