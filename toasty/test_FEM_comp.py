@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import numpy as np
 from toasty.FEM_comp import FEM as FEM_dense
-from toasty import FEM, Mass, gen_mesh, AvgTemp
+from toasty import FEM, Mass, gen_mesh, AvgTemp, PenalizeDensity
 import subprocess
 
 cur_dir = os.path.dirname(__file__)
@@ -33,10 +33,10 @@ def callback_plot(x, fname=None):
         fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
-out_folder = os.path.join(cur_dir, "opt")
+out_folder = os.path.join(cur_dir, "opt_simp")
 
-nx = 51
-ny = 51
+nx = 31
+ny = 31
 n_elem = (nx - 1) * (ny - 1)
 xlim = (0.0, 1.0)
 ylim = xlim
@@ -50,18 +50,19 @@ q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
 q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
 
 prob = om.Problem()
+prob.model.add_subsystem("simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes=["*"])
 
 # Pick if you want dense or sparse
 # fem = prob.model.add_subsystem("fem", FEM_dense(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes=["*"])
 fem = prob.model.add_subsystem("fem", FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes=["*"])
 
-prob.model.add_subsystem("mass", Mass(num_x=nx, num_y=ny), promotes=["*"])
+prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes=["*"])
 # prob.model.add_subsystem("element_avg_temp", AvgTemp(num_x=nx, num_y=ny), promotes=["*"])
 # prob.model.add_subsystem("max_temp", om.KSComp(width=n_elem, rho=50.0), promotes_inputs=[("g", "avg_temp")], promotes_outputs=[("KS", "max_temp")])
-prob.model.add_subsystem("max_temp", om.KSComp(width=nx * ny, rho=50.0), promotes_inputs=[("g", "temp")], promotes_outputs=[("KS", "max_temp")])
+prob.model.add_subsystem("calc_max_temp", om.KSComp(width=nx * ny, rho=50.0), promotes_inputs=[("g", "temp")], promotes_outputs=[("KS", "max_temp")])
 
 prob.model.add_objective("mass")
-prob.model.add_design_var("density", lower=1e-6, upper=1.0)
+prob.model.add_design_var("density_dv", lower=1e-6, upper=1.0)
 prob.model.add_constraint("max_temp", upper=600)
 
 prob.model.linear_solver = om.DirectSolver()

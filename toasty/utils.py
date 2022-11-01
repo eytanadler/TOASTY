@@ -108,3 +108,49 @@ class AvgTemp(om.ExplicitComponent):
 
         jacobian["avg_temp", "temp"] *= 0
         jacobian["avg_temp", "temp"] += np.repeat(inputs["density"], 4) / 4
+
+class PenalizeDensity(om.ExplicitComponent):
+    """
+    Apply a penalty to density as density^p where p is an option.
+
+    Inputs
+    ------
+    density_dv : float
+        Densities of each element. The shape corresponds to the flattened
+        2D array of elements.
+    
+    Outputs
+    ------
+    density : float
+        The penalized densities of each element. The shape corresponds to
+        the flattened 2D array of elements.
+
+    Options
+    -------
+    num_x : int
+        Number of mesh coordinates in the x direction.
+    num_y : int
+        Number of mesh coordinates in the y direction.
+    p : float
+        Penalty factor.
+    """
+    def initialize(self):
+        self.options.declare("num_x", types=int, desc="Number of mesh coordinates in the x direction")
+        self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
+        self.options.declare("p", default=3.0, types=float, desc="Penalty factor")
+    
+    def setup(self):
+        nx, ny = (self.options["num_x"], self.options["num_y"])
+        n_elem = (nx - 1) * (ny - 1)
+
+        self.add_input("density_dv", shape=(n_elem,))
+        self.add_output("density", shape=(n_elem,))
+
+        arng = np.arange(n_elem)
+        self.declare_partials("density", "density_dv", rows=arng, cols=arng)
+    
+    def compute(self, inputs, outputs):
+        outputs["density"] = inputs["density_dv"] ** self.options["p"]
+
+    def compute_partials(self, inputs, jacobian):
+        jacobian["density", "density_dv"] = self.options["p"] * inputs["density_dv"] ** (self.options["p"] - 1)
