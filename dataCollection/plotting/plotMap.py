@@ -3,7 +3,11 @@ import tilemapbase as tmb
 from FlightRadar24.api import FlightRadar24API
 import numpy as np
 
-
+"""
+tilemapbase https://github.com/MatthewDaws/TileMapBase
+example https://github.com/MatthewDaws/TileMapBase/blob/master/notebooks/Example.ipynb
+openstreetmap https://www.openstreetmap.org
+"""
 # tmb.start_logging()
 # tmb.init(create=True)
 
@@ -45,6 +49,7 @@ plotter.plot(ax, t)
 fr_api = FlightRadar24API()
 allFlights = fr_api.get_flights(airport="SAN")
 
+# tweak this to get a flight that has an actual trail - tricky in real time
 someFlights = []
 for f in allFlights:
     if f.destination_airport_iata == "SAN" and f.on_ground == 1:
@@ -57,6 +62,8 @@ for i, point in enumerate(trail):
 
 for i, point in enumerate(latlong):
     print(point)
+
+    # do this part to associate the map with the data!
     x, y = tmb.project(*point)
     ax.scatter(x, y, color="black")
     # if i > 10:
