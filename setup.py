@@ -26,5 +26,9 @@ setup(
     install_requires=[
         "numpy>=1.16",
         "scipy",
+        "openmdao>=3.16",
     ],
+    extras_require={
+        "test": ["pytest"],
+    },
 )

@@ -8,10 +8,12 @@ import subprocess
 
 # Do this to have the plotting work with nohup
 import matplotlib
+
 matplotlib.use("Agg")
 plt.ioff()
 
 cur_dir = os.path.dirname(__file__)
+
 
 def callback_plot(x, fname=None):
     # Only save a plot every X major iterations
@@ -40,6 +42,7 @@ def callback_plot(x, fname=None):
         fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
+
 out_folder = os.path.join(cur_dir, "opt")
 
 d = 101
@@ -53,15 +56,29 @@ T_set = np.full((nx, ny), np.inf)
 T_set[[nx // 3, 2 * nx // 3], 0] = 200.0
 
 q = np.zeros((nx - 1, ny - 1), dtype=float)
-q[0, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
-q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
-q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
+q[0, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
+q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
+q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
 
 prob = om.Problem()
-prob.model.add_subsystem("simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes_inputs=["density_dv"], promotes_outputs=["density"])
-prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes_inputs=[("density", "density")], promotes_outputs=["mass"])
-fem = prob.model.add_subsystem("fem", FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes_inputs=["density"], promotes_outputs=["temp"])
-prob.model.add_subsystem("calc_max_temp", om.KSComp(width=nx * ny, rho=50.0), promotes_inputs=[("g", "temp")], promotes_outputs=[("KS", "max_temp")])
+prob.model.add_subsystem(
+    "simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes_inputs=["density_dv"], promotes_outputs=["density"]
+)
+prob.model.add_subsystem(
+    "calc_mass", Mass(num_x=nx, num_y=ny), promotes_inputs=[("density", "density")], promotes_outputs=["mass"]
+)
+fem = prob.model.add_subsystem(
+    "fem",
+    FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q),
+    promotes_inputs=["density"],
+    promotes_outputs=["temp"],
+)
+prob.model.add_subsystem(
+    "calc_max_temp",
+    om.KSComp(width=nx * ny, rho=50.0),
+    promotes_inputs=[("g", "temp")],
+    promotes_outputs=[("KS", "max_temp")],
+)
 
 prob.model.add_objective("mass")
 prob.model.add_design_var("density_dv", lower=1e-6, upper=1.0)
@@ -72,7 +89,7 @@ os.makedirs(out_folder, exist_ok=True)
 prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
 prob.driver.options["debug_print"] = ["objs", "nl_cons"]  # desvars, nl_cons, ln_cons, objs, totals
 prob.driver.opt_settings["Iterations limit"] = 1e7
-prob.driver.opt_settings["Major iterations limit"] = 10 #5000
+prob.driver.opt_settings["Major iterations limit"] = 10  # 5000
 # prob.driver.opt_settings["Violation limit"] = 1e4
 prob.driver.opt_settings["Major optimality tolerance"] = 1e-5
 prob.driver.opt_settings["Major feasibility tolerance"] = 1e-7
@@ -99,7 +116,10 @@ mesh_x, mesh_y = fem.get_mesh()
 # prob.check_partials()
 prob.run_driver()
 
-callback_plot({"funcs": {"fem.temp": prob.get_val("temp")}, "xuser": {"density": prob.get_val("density")}, "nMajor": 0}, fname=os.path.join(out_folder, f"opt_final.pdf"))
+callback_plot(
+    {"funcs": {"fem.temp": prob.get_val("temp")}, "xuser": {"density": prob.get_val("density")}, "nMajor": 0},
+    fname=os.path.join(out_folder, f"opt_final.pdf"),
+)
 
 # Create video
 subprocess.run(

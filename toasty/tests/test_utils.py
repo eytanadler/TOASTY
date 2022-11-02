@@ -45,7 +45,7 @@ class TestMass(unittest.TestCase):
         p.setup()
 
         p.set_val("density", rho)
-    
+
         om_assert.assert_check_partials(p.check_partials())
 
 
