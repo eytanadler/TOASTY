@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ["ubuntu-latest", "windows-latest", "macos-latest"]
+        python-version: ["3.8", "3.9", "3.10"]
+      fail-fast: false
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set Python Version
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        auto-update-conda: true
+        python-version: ${{ matrix.python-version }}
+    - name: Setup conda
+      run: |
+        conda config --set always_yes yes
+        conda install numpy scipy
+    - name: Install
+      run: |
+        pip install .
+        pip install pytest
+    - name: List Python and package info
+      run: |
+        python --version
+        pip list
+    - name: Build and Test
+      run: |
+        cd toasty
+        python -m pytest -v .
