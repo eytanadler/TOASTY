@@ -4,6 +4,13 @@ import openmdao.api as om
 from .utils import gen_mesh
 from collections.abc import Iterable
 
+from scipy.sparse.linalg import spsolve
+# try:
+#     from pypardiso import spsolve
+# except ImportError:
+#     print("Install pypardiso for faster linear solves, falling back to scipy")
+#     from scipy.sparse.linalg import spsolve
+
 
 class FEM(om.ImplicitComponent):
     """
@@ -90,7 +97,7 @@ class FEM(om.ImplicitComponent):
     def solve_nonlinear(self, inputs, outputs):
         print("solve_nonlinear")
         self._update_global_stiffness(inputs["density"])
-        outputs["temp"] = sp.linalg.spsolve(self.K_glob, self.F_glob)
+        outputs["temp"] = spsolve(self.K_glob, self.F_glob)
 
     def linearize(self, inputs, outputs, _):
         print("linearize")
@@ -152,10 +159,10 @@ class FEM(om.ImplicitComponent):
     def solve_linear(self, d_outputs, d_residuals, mode):
         if mode == "fwd":
             print("solve_linear fwd")
-            d_outputs["temp"] = sp.linalg.spsolve(self.pRpu, d_residuals["temp"])
+            d_outputs["temp"] = spsolve(self.pRpu, d_residuals["temp"])
         elif mode == "rev":
             print("solve_linear rev")
-            d_residuals["temp"] = sp.linalg.spsolve(self.pRpu, d_outputs["temp"])
+            d_residuals["temp"] = spsolve(self.pRpu, d_outputs["temp"])
 
     def get_mesh(self):
         """
@@ -169,6 +176,29 @@ class FEM(om.ImplicitComponent):
             Matrix of y coordinates
         """
         return self.mesh_x, self.mesh_y
+    
+    def _preprocess_global_stiffness(self):
+        """
+        By splitting up the global stiffness matrix into four components where there is no
+        overlap of elements at any spot in the matrix, we can avoid doing the global stiffness
+        matrix assembly every time the densities change. Instead, we simple have to multiply the
+        correct spots in the four components by the associated densities and use the resulting
+        values to initialize a sparse matrix.
+
+        This method creates those four components of the stiffness matrix, along with the associated
+        rows and columns of the values. It also creates the index map that defines which densities
+        to multiply each element the four components by. Because it depends only on the mesh and
+        temperature boundary conditions (which are defined once at the beginning), this method
+        must run only once at the start of the evaluation/optimization.
+
+        The member variables this function adds are:
+            TODO
+            K_rows
+            K_cols
+            K_vals (4-element list with the four individual components?)
+            idx_density_map (does this also need to be a 4-element list or only one?)
+        """
+        pass
 
     def _update_global_stiffness(self, density, partial=False):
         """
