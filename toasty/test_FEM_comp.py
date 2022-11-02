@@ -6,12 +6,19 @@ from toasty.FEM_comp import FEM as FEM_dense
 from toasty import FEM, Mass, gen_mesh, AvgTemp, PenalizeDensity
 import subprocess
 
+# Do this to have the plotting work with nohup
+import matplotlib
+matplotlib.use("Agg")
+plt.ioff()
+
 cur_dir = os.path.dirname(__file__)
 
 def callback_plot(x, fname=None):
-    # Only save a plot every 10 major iterations
-    if x["nMajor"] % 10 != 0:
+    # Only save a plot every X major iterations
+    if x["nMajor"] % 5 != 0:
         return
+
+    print("plotting")
 
     T = prob.get_val("temp").reshape(nx, ny)
     density = prob.get_val("density").reshape(nx - 1, ny - 1)
@@ -33,10 +40,11 @@ def callback_plot(x, fname=None):
         fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
-out_folder = os.path.join(cur_dir, "opt_simp")
+out_folder = os.path.join(cur_dir, "opt_more_DVs_lim_mem")
 
-nx = 31
-ny = 31
+d = 151
+nx = d
+ny = d
 n_elem = (nx - 1) * (ny - 1)
 xlim = (0.0, 1.0)
 ylim = xlim
@@ -65,30 +73,32 @@ prob.model.add_objective("mass")
 prob.model.add_design_var("density_dv", lower=1e-6, upper=1.0)
 prob.model.add_constraint("max_temp", upper=600)
 
-prob.model.linear_solver = om.DirectSolver()
-
 prob.driver = om.pyOptSparseDriver(optimizer="SNOPT")
 os.makedirs(out_folder, exist_ok=True)
 prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
 prob.driver.options["debug_print"] = ["objs", "nl_cons"]  # desvars, nl_cons, ln_cons, objs, totals
 prob.driver.opt_settings["Iterations limit"] = 1e7
 prob.driver.opt_settings["Major iterations limit"] = 5000
-prob.driver.opt_settings["Major optimality tolerance"] = 1e-6
-prob.driver.opt_settings["Major feasibility tolerance"] = 1e-8
+prob.driver.opt_settings["Major optimality tolerance"] = 1e-5
+prob.driver.opt_settings["Major feasibility tolerance"] = 1e-7
 prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
 prob.driver.opt_settings["Summary file"] = os.path.join(out_folder, "SNOPT_summary.out")
 prob.driver.opt_settings["snSTOP function handle"] = callback_plot
-prob.driver.opt_settings["Hessian"] = "full memory"
+# prob.driver.opt_settings["Hessian"] = "full memory"
 prob.driver.opt_settings["Verify level"] = 0
 
-prob.setup()
+prob.setup(mode="rev")
 
 mesh_x, mesh_y = fem.get_mesh()
 
-# prob.set_val("density", np.random.rand((nx - 1) * (ny - 1)))
-
+# print("Running model")
 # prob.run_model()
-# prob.check_partials(includes=["element_avg_temp"])
+# print("Computing totals")
+# from time import time
+# t_before = time()
+# prob.check_totals(["max_temp", "mass"], "density")
+# print(f"Derivatives took {time() - t_before} sec")
+# prob.check_partials()
 prob.run_driver()
 
 # om.n2(prob, show_browser=False, outfile=os.path.join(out_folder, "opt_n2.html"))
@@ -99,7 +109,7 @@ subprocess.run(
     [
         "ffmpeg",
         "-framerate",
-        "30",
+        "24",
         "-pattern_type",
         "glob",
         "-i",

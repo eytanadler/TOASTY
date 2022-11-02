@@ -84,11 +84,19 @@ class FEM(om.ImplicitComponent):
         self.declare_partials("temp", "density")
     
     def apply_nonlinear(self, inputs, outputs, residuals):
+        print("apply_nonlinear")
         self._update_global_stiffness(inputs["density"])
         residuals["temp"] = self.K_glob @ outputs["temp"] - self.F_glob.flatten()
 
-    def linearize(self, inputs, outputs, jacobian):
+    def solve_nonlinear(self, inputs, outputs):
+        print("solve_nonlinear")
         self._update_global_stiffness(inputs["density"])
+        outputs["temp"] = sp.linalg.spsolve(self.K_glob, self.F_glob)
+
+    def linearize(self, inputs, outputs, jacobian):
+        print("linearize")
+        self._update_global_stiffness(inputs["density"])
+        self.pRpu = self.K_glob
         jacobian["temp", "temp"] = self.K_glob.data
 
         # Loop over each element and brute force the derivatives w.r.t. density
@@ -125,10 +133,33 @@ class FEM(om.ImplicitComponent):
                 if np.isfinite(self.options["T_set"][i, j]):
                     idx_glob = self._flattened_node_ij(i, j)
                     jacobian["temp", "density"][idx_glob, :] = 0.0
+        
+        self.pRpx = jacobian["temp", "density"].reshape((self.nx * self.ny, (self.nx - 1) * (self.ny - 1)))
 
-    def solve_nonlinear(self, inputs, outputs):
-        self._update_global_stiffness(inputs["density"])
-        outputs["temp"] = sp.linalg.spsolve(self.K_glob, self.F_glob)
+    def apply_linear(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
+        if "temp" not in d_residuals:
+            return
+
+        if mode == "fwd":
+            print("apply_linear fwd")
+            if "temp" in d_outputs:
+                d_residuals["temp"] = self.pRpu @ d_outputs["temp"]
+            if "density" in d_inputs:
+                d_residuals["temp"] = self.pRpx @ d_inputs["density"]
+        elif mode == "rev":
+            print("apply_linear rev")
+            if "temp" in d_outputs:
+                d_outputs["temp"] = self.pRpu.T @ d_residuals["temp"]
+            if "density" in d_inputs:
+                d_inputs["density"] = self.pRpx.T @ d_residuals["temp"]
+
+    def solve_linear(self, d_outputs, d_residuals, mode):
+        if mode == "fwd":
+            print("solve_linear fwd")
+            d_outputs["temp"] = sp.linalg.spsolve(self.pRpu, d_residuals["temp"])
+        elif mode == "rev":
+            print("solve_linear rev")
+            d_residuals["temp"] = sp.linalg.spsolve(self.pRpu, d_outputs["temp"])
 
     def get_mesh(self):
         """
