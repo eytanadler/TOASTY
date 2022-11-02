@@ -92,7 +92,7 @@ class FEM(om.ImplicitComponent):
         self._update_global_stiffness(inputs["density"])
         outputs["temp"] = sp.linalg.spsolve(self.K_glob, self.F_glob)
 
-    def linearize(self, inputs, outputs, jacobian):
+    def linearize(self, inputs, outputs, _):
         print("linearize")
         self._update_global_stiffness(inputs["density"])
         self.pRpu = self.K_glob
@@ -139,15 +139,15 @@ class FEM(om.ImplicitComponent):
         if mode == "fwd":
             print("apply_linear fwd")
             if "temp" in d_outputs:
-                d_residuals["temp"] = self.pRpu @ d_outputs["temp"]
+                d_residuals["temp"] += self.pRpu @ d_outputs["temp"]
             if "density" in d_inputs:
-                d_residuals["temp"] = self.pRpx @ d_inputs["density"]
+                d_residuals["temp"] += self.pRpx @ d_inputs["density"]
         elif mode == "rev":
             print("apply_linear rev")
             if "temp" in d_outputs:
-                d_outputs["temp"] = self.pRpu.T @ d_residuals["temp"]
+                d_outputs["temp"] += self.pRpu.T @ d_residuals["temp"]
             if "density" in d_inputs:
-                d_inputs["density"] = self.pRpx.T @ d_residuals["temp"]
+                d_inputs["density"] += self.pRpx.T @ d_residuals["temp"]
 
     def solve_linear(self, d_outputs, d_residuals, mode):
         if mode == "fwd":

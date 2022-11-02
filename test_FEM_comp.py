@@ -40,7 +40,7 @@ def callback_plot(x, fname=None):
         fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
-out_folder = os.path.join(cur_dir, "opt_")
+out_folder = os.path.join(cur_dir, "opt")
 
 d = 101
 nx = d
@@ -94,7 +94,7 @@ mesh_x, mesh_y = fem.get_mesh()
 # print("Computing totals")
 # from time import time
 # t_before = time()
-# prob.check_totals(["max_temp", "mass"], "density")
+# prob.check_totals(["max_temp", "mass"], "density_dv")
 # print(f"Derivatives took {time() - t_before} sec")
 # prob.check_partials()
 prob.run_driver()
