@@ -8,7 +8,7 @@ from .utils import gen_mesh
 class FEM(om.ImplicitComponent):
     """
     Finite element method component.
-    
+
     Inputs
     ------
     density : float
@@ -39,6 +39,7 @@ class FEM(om.ImplicitComponent):
     conductivity : float
         Material thermal conductivity, by default 1000
     """
+
     def initialize(self):
         self.options.declare("num_x", types=int, desc="Number of mesh coordinates in the x direction")
         self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
@@ -83,7 +84,7 @@ class FEM(om.ImplicitComponent):
         # TODO: declare sparsity pattern
         self.declare_partials("temp", "temp", val=self.K_glob)  # sparsity inferred from sparse K matrix
         self.declare_partials("temp", "density")
-    
+
     def apply_nonlinear(self, inputs, outputs, residuals):
         self._update_global_stiffness(inputs["density"])
         residuals["temp"] = self.K_glob @ outputs["temp"] - self.F_glob.flatten()
@@ -164,7 +165,7 @@ class FEM(om.ImplicitComponent):
                 idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
 
                 self.K_glob[np.ix_(idx_glob, idx_glob)] += dens_mat[i, j] * K_loc
-        
+
         # Any temperatures that are specified get a one along the diagonal and zeros otherwise in K
         for i in range(self.nx):
             for j in range(self.ny):
@@ -301,7 +302,8 @@ class FEM(om.ImplicitComponent):
         [N1, N2, N3, N4]
         """
         return (
-            1 / 4
+            1
+            / 4
             * np.array([[(xi - 1) * (eta - 1), -(xi + 1) * (eta - 1), (xi + 1) * (eta + 1), -(xi - 1) * (eta + 1)]])
         )
 
@@ -316,7 +318,8 @@ class FEM(om.ImplicitComponent):
          -                                      -
         """
         return (
-            1 / 4
+            1
+            / 4
             * np.array(
                 [
                     [eta - 1, -eta + 1, eta + 1, -eta - 1],

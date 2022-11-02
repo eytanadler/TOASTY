@@ -1,16 +1,18 @@
 import openmdao.api as om
 import numpy as np
 
+
 def gen_mesh(nx, ny, xlim, ylim):
     x_linspace = np.linspace(*xlim, nx)
     y_linspace = np.linspace(*ylim, ny)
     return np.meshgrid(x_linspace, y_linspace, indexing="ij")
 
+
 class Mass(om.ExplicitComponent):
     """
     Computes the "mass" of the mesh by summing the densities. This assumes all elements in the
     mesh are the same size and the mass of an element with a density of 1 is 1.
-    
+
     Inputs
     ------
     density : float
@@ -30,10 +32,11 @@ class Mass(om.ExplicitComponent):
     num_y : int
         Number of mesh coordinates in the y direction.
     """
+
     def initialize(self):
         self.options.declare("num_x", types=int, desc="Number of mesh coordinates in the x direction")
         self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
-    
+
     def setup(self):
         nx, ny = (self.options["num_x"], self.options["num_y"])
         self.add_input("density", shape=((nx - 1) * (ny - 1),))
@@ -43,6 +46,7 @@ class Mass(om.ExplicitComponent):
 
     def compute(self, inputs, outputs):
         outputs["mass"] = np.sum(inputs["density"])
+
 
 class AvgTemp(om.ExplicitComponent):
     """
@@ -61,7 +65,7 @@ class AvgTemp(om.ExplicitComponent):
     -------
     avg_temp : float
         Average element temperature weighted by densities, same shape as density input.
-    
+
     Options
     -------
     num_x : int
@@ -69,10 +73,11 @@ class AvgTemp(om.ExplicitComponent):
     num_y : int
         Number of mesh coordinates in the y direction.
     """
+
     def initialize(self):
         self.options.declare("num_x", types=int, desc="Number of mesh coordinates in the x direction")
         self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
-    
+
     def setup(self):
         nx, ny = (self.options["num_x"], self.options["num_y"])
         n_elem = (nx - 1) * (ny - 1)
@@ -109,6 +114,7 @@ class AvgTemp(om.ExplicitComponent):
         jacobian["avg_temp", "temp"] *= 0
         jacobian["avg_temp", "temp"] += np.repeat(inputs["density"], 4) / 4
 
+
 class PenalizeDensity(om.ExplicitComponent):
     """
     Apply a penalty to density as density^p where p is an option.
@@ -118,7 +124,7 @@ class PenalizeDensity(om.ExplicitComponent):
     density_dv : float
         Densities of each element. The shape corresponds to the flattened
         2D array of elements.
-    
+
     Outputs
     ------
     density : float
@@ -134,11 +140,12 @@ class PenalizeDensity(om.ExplicitComponent):
     p : float
         Penalty factor.
     """
+
     def initialize(self):
         self.options.declare("num_x", types=int, desc="Number of mesh coordinates in the x direction")
         self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
         self.options.declare("p", default=3.0, types=float, desc="Penalty factor")
-    
+
     def setup(self):
         nx, ny = (self.options["num_x"], self.options["num_y"])
         n_elem = (nx - 1) * (ny - 1)
@@ -148,7 +155,7 @@ class PenalizeDensity(om.ExplicitComponent):
 
         arng = np.arange(n_elem)
         self.declare_partials("density", "density_dv", rows=arng, cols=arng)
-    
+
     def compute(self, inputs, outputs):
         outputs["density"] = inputs["density_dv"] ** self.options["p"]
 
