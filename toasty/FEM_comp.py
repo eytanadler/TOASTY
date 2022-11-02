@@ -80,9 +80,6 @@ class FEM(om.ImplicitComponent):
         self.F_glob = np.zeros((nx * ny, 1), dtype=float)
         self._update_global_force()
 
-        self.declare_partials("temp", "temp", rows=self.sp_rows, cols=self.sp_cols)
-        self.declare_partials("temp", "density")
-    
     def apply_nonlinear(self, inputs, outputs, residuals):
         print("apply_nonlinear")
         self._update_global_stiffness(inputs["density"])
@@ -97,10 +94,9 @@ class FEM(om.ImplicitComponent):
         print("linearize")
         self._update_global_stiffness(inputs["density"])
         self.pRpu = self.K_glob
-        jacobian["temp", "temp"] = self.K_glob.data
 
         # Loop over each element and brute force the derivatives w.r.t. density
-        jacobian["temp", "density"] = np.zeros((self.nx * self.ny, (self.nx - 1) * (self.ny - 1)))
+        self.pRpx = np.zeros((self.nx * self.ny, (self.nx - 1) * (self.ny - 1)))
 
         # Because we use meshgrid, all elements are the same size and shape,
         # and we use the same thermal conductivity throughout. Thus, the local
@@ -124,7 +120,7 @@ class FEM(om.ImplicitComponent):
                 # unknown vector (and global stiffness matrix) they'd be
                 idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
 
-                jacobian["temp", "density"][idx_glob, idx_elem] += K_loc @ outputs["temp"][idx_glob]
+                self.pRpx[idx_glob, idx_elem] += K_loc @ outputs["temp"][idx_glob]
                 idx_elem += 1
 
         # Any temperatures that are specified get a one along the diagonal and zeros otherwise in K
@@ -132,9 +128,7 @@ class FEM(om.ImplicitComponent):
             for j in range(self.ny):
                 if np.isfinite(self.options["T_set"][i, j]):
                     idx_glob = self._flattened_node_ij(i, j)
-                    jacobian["temp", "density"][idx_glob, :] = 0.0
-        
-        self.pRpx = jacobian["temp", "density"].reshape((self.nx * self.ny, (self.nx - 1) * (self.ny - 1)))
+                    self.pRpx[idx_glob, :] = 0.0
 
     def apply_linear(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
         if "temp" not in d_residuals:

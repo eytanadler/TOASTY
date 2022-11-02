@@ -40,9 +40,9 @@ def callback_plot(x, fname=None):
         fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
-out_folder = os.path.join(cur_dir, "opt_23kDV_correct_simp")
+out_folder = os.path.join(cur_dir, "opt_")
 
-d = 151
+d = 101
 nx = d
 ny = d
 n_elem = (nx - 1) * (ny - 1)
@@ -58,9 +58,9 @@ q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
 q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
 
 prob = om.Problem()
-prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes=[("density", "density_dv"), "mass"])
-prob.model.add_subsystem("simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes=["*"])
-fem = prob.model.add_subsystem("fem", FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes=["*"])
+prob.model.add_subsystem("simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes_inputs=["density_dv"], promotes_outputs=["density"])
+prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes_inputs=[("density", "density")], promotes_outputs=["mass"])
+fem = prob.model.add_subsystem("fem", FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes_inputs=["density"], promotes_outputs=["temp"])
 prob.model.add_subsystem("calc_max_temp", om.KSComp(width=nx * ny, rho=50.0), promotes_inputs=[("g", "temp")], promotes_outputs=[("KS", "max_temp")])
 
 prob.model.add_objective("mass")
@@ -72,13 +72,14 @@ os.makedirs(out_folder, exist_ok=True)
 prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
 prob.driver.options["debug_print"] = ["objs", "nl_cons"]  # desvars, nl_cons, ln_cons, objs, totals
 prob.driver.opt_settings["Iterations limit"] = 1e7
-prob.driver.opt_settings["Major iterations limit"] = 5000
+prob.driver.opt_settings["Major iterations limit"] = 10 #5000
+# prob.driver.opt_settings["Violation limit"] = 1e4
 prob.driver.opt_settings["Major optimality tolerance"] = 1e-5
 prob.driver.opt_settings["Major feasibility tolerance"] = 1e-7
 prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
 prob.driver.opt_settings["Summary file"] = os.path.join(out_folder, "SNOPT_summary.out")
 prob.driver.opt_settings["snSTOP function handle"] = callback_plot
-prob.driver.opt_settings["New superbasics limit"] = 1000
+# prob.driver.opt_settings["New superbasics limit"] = 10000
 # prob.driver.opt_settings["Hessian"] = "full memory"
 prob.driver.opt_settings["Verify level"] = 0
 
