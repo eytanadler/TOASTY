@@ -65,7 +65,7 @@ trail = details["trail"]
 
 latlong = np.zeros((len(trail), 2))
 for i, point in enumerate(trail):
-    latlong[i, :] = [point["lat"], point["lng"]]
+    latlong[i, :] = [point["lng"], point["lat"]]
 
 nice.setRCParams()
 fig, ax = plt.subplots()
