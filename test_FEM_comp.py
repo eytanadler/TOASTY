@@ -2,8 +2,8 @@ import openmdao.api as om
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-from toasty.FEM_comp import FEM as FEM_dense
-from toasty import FEM, Mass, gen_mesh, AvgTemp, PenalizeDensity
+from toasty.FEM_comp_dense import FEM as FEM_dense
+from toasty import FEM, Mass, PenalizeDensity
 import subprocess
 
 # Do this to have the plotting work with nohup
@@ -40,7 +40,7 @@ def callback_plot(x, fname=None):
         fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
-out_folder = os.path.join(cur_dir, "opt_more_DVs_lim_mem")
+out_folder = os.path.join(cur_dir, "opt_23kDV_correct_simp")
 
 d = 151
 nx = d
@@ -58,15 +58,9 @@ q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
 q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1))**1.5
 
 prob = om.Problem()
+prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes=[("density", "density_dv"), "mass"])
 prob.model.add_subsystem("simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes=["*"])
-
-# Pick if you want dense or sparse
-# fem = prob.model.add_subsystem("fem", FEM_dense(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes=["*"])
 fem = prob.model.add_subsystem("fem", FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q), promotes=["*"])
-
-prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes=["*"])
-# prob.model.add_subsystem("element_avg_temp", AvgTemp(num_x=nx, num_y=ny), promotes=["*"])
-# prob.model.add_subsystem("max_temp", om.KSComp(width=n_elem, rho=50.0), promotes_inputs=[("g", "avg_temp")], promotes_outputs=[("KS", "max_temp")])
 prob.model.add_subsystem("calc_max_temp", om.KSComp(width=nx * ny, rho=50.0), promotes_inputs=[("g", "temp")], promotes_outputs=[("KS", "max_temp")])
 
 prob.model.add_objective("mass")
@@ -84,12 +78,15 @@ prob.driver.opt_settings["Major feasibility tolerance"] = 1e-7
 prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
 prob.driver.opt_settings["Summary file"] = os.path.join(out_folder, "SNOPT_summary.out")
 prob.driver.opt_settings["snSTOP function handle"] = callback_plot
+prob.driver.opt_settings["New superbasics limit"] = 1000
 # prob.driver.opt_settings["Hessian"] = "full memory"
 prob.driver.opt_settings["Verify level"] = 0
 
 prob.setup(mode="rev")
 
 mesh_x, mesh_y = fem.get_mesh()
+
+# om.n2(prob, show_browser=True, outfile=os.path.join(out_folder, "opt_n2.html"))
 
 # print("Running model")
 # prob.run_model()
@@ -101,7 +98,6 @@ mesh_x, mesh_y = fem.get_mesh()
 # prob.check_partials()
 prob.run_driver()
 
-# om.n2(prob, show_browser=False, outfile=os.path.join(out_folder, "opt_n2.html"))
 callback_plot({"funcs": {"fem.temp": prob.get_val("temp")}, "xuser": {"density": prob.get_val("density")}, "nMajor": 0}, fname=os.path.join(out_folder, f"opt_final.pdf"))
 
 # Create video

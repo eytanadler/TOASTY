@@ -1,9 +1,8 @@
 import numpy as np
 import scipy.sparse as sp
 import openmdao.api as om
-from collections.abc import Iterable
 from .utils import gen_mesh
-
+from collections.abc import Iterable
 
 class FEM(om.ImplicitComponent):
     """
@@ -72,43 +71,95 @@ class FEM(om.ImplicitComponent):
             self.N.append(FEM._N(xi, eta))
 
         # Stiffness matrix
-        self.K_glob = np.zeros((nx * ny, nx * ny), dtype=float)
-        self.density = np.ones((nx - 1) * (ny - 1))
-        self._update_global_stiffness(self.density)
+        self.sp_rows, self.sp_cols = self._get_sparsity_pattern()
+        self.K_glob = None
+        self.density = np.zeros((nx - 1) * (ny - 1))
+        self._update_global_stiffness(np.ones((nx - 1) * (ny - 1)))
 
         # Set force vector to zero until user specifies nonzero heats
         self.F_glob = np.zeros((nx * ny, 1), dtype=float)
         self._update_global_force()
 
-        # TODO: declare sparsity pattern
-        self.declare_partials("temp", "temp", val=self.K_glob)  # sparsity inferred from sparse K matrix
+        self.declare_partials("temp", "temp", rows=self.sp_rows, cols=self.sp_cols)
         self.declare_partials("temp", "density")
     
     def apply_nonlinear(self, inputs, outputs, residuals):
+        print("apply_nonlinear")
         self._update_global_stiffness(inputs["density"])
         residuals["temp"] = self.K_glob @ outputs["temp"] - self.F_glob.flatten()
 
-    def linearize(self, inputs, outputs, jacobian):
+    def solve_nonlinear(self, inputs, outputs):
+        print("solve_nonlinear")
         self._update_global_stiffness(inputs["density"])
-        jacobian["temp", "temp"] = self.K_glob
+        outputs["temp"] = sp.linalg.spsolve(self.K_glob, self.F_glob)
+
+    def linearize(self, inputs, outputs, jacobian):
+        print("linearize")
+        self._update_global_stiffness(inputs["density"])
+        self.pRpu = self.K_glob
+        jacobian["temp", "temp"] = self.K_glob.data
 
         # Loop over each element and brute force the derivatives w.r.t. density
         jacobian["temp", "density"] = np.zeros((self.nx * self.ny, (self.nx - 1) * (self.ny - 1)))
-        d = np.zeros((self.nx - 1, self.ny - 1))
+
+        # Because we use meshgrid, all elements are the same size and shape,
+        # and we use the same thermal conductivity throughout. Thus, the local
+        # stiffness matrix is identical for each element.
+        K_loc = self._local_stiffness(0, 0)
+
+        idx_elem = 0
         for i in range(self.nx - 1):
             for j in range(self.ny - 1):
-                d[i, j] = 1.0
+                # 2D indices in the mesh of the nodes surrounding the current element
+                idx = np.array(
+                    [
+                        [i, j],
+                        [i + 1, j],
+                        [i + 1, j + 1],
+                        [i, j + 1],
+                    ]
+                )
 
-                self._update_global_stiffness(d, partial=True)
-                jacobian["temp", "density"][:, i * (self.ny - 1) + j] = self.K_glob @ outputs["temp"]
+                # Convert the 2D indices to flattened 1D to determine where in the
+                # unknown vector (and global stiffness matrix) they'd be
+                idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
 
-                d[i, j] = 0.0
+                jacobian["temp", "density"][idx_glob, idx_elem] += K_loc @ outputs["temp"][idx_glob]
+                idx_elem += 1
 
-        self._update_global_stiffness(inputs["density"])
+        # Any temperatures that are specified get a one along the diagonal and zeros otherwise in K
+        for i in range(self.nx):
+            for j in range(self.ny):
+                if np.isfinite(self.options["T_set"][i, j]):
+                    idx_glob = self._flattened_node_ij(i, j)
+                    jacobian["temp", "density"][idx_glob, :] = 0.0
+        
+        self.pRpx = jacobian["temp", "density"].reshape((self.nx * self.ny, (self.nx - 1) * (self.ny - 1)))
 
-    def solve_nonlinear(self, inputs, outputs):
-        self._update_global_stiffness(inputs["density"])
-        outputs["temp"] = np.linalg.solve(self.K_glob, self.F_glob)
+    def apply_linear(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
+        if "temp" not in d_residuals:
+            return
+
+        if mode == "fwd":
+            print("apply_linear fwd")
+            if "temp" in d_outputs:
+                d_residuals["temp"] = self.pRpu @ d_outputs["temp"]
+            if "density" in d_inputs:
+                d_residuals["temp"] = self.pRpx @ d_inputs["density"]
+        elif mode == "rev":
+            print("apply_linear rev")
+            if "temp" in d_outputs:
+                d_outputs["temp"] = self.pRpu.T @ d_residuals["temp"]
+            if "density" in d_inputs:
+                d_inputs["density"] = self.pRpx.T @ d_residuals["temp"]
+
+    def solve_linear(self, d_outputs, d_residuals, mode):
+        if mode == "fwd":
+            print("solve_linear fwd")
+            d_outputs["temp"] = sp.linalg.spsolve(self.pRpu, d_residuals["temp"])
+        elif mode == "rev":
+            print("solve_linear rev")
+            d_residuals["temp"] = sp.linalg.spsolve(self.pRpu, d_outputs["temp"])
 
     def get_mesh(self):
         """
@@ -137,14 +188,26 @@ class FEM(om.ImplicitComponent):
             If using this function to compute partial derivatives, setting this to True
             will zero out rows where temperatures are specified.
         """
-        dens_mat = np.reshape(density, (self.nx - 1, self.ny - 1))
+        if not np.any(self.density != density):
+            return
+
+        self.density[:] = density[:]
+
+        nx, ny = (self.nx, self.ny)
+        dens_mat = np.reshape(density, (nx - 1, ny - 1))
 
         # Because we use meshgrid, all elements are the same size and shape,
         # and we use the same thermal conductivity throughout. Thus, the local
         # stiffness matrix is identical for each element.
         K_loc = self._local_stiffness(0, 0)
 
-        self.K_glob *= 0  # reset global stiffness matrix
+        # Initialize sparse matrix
+        # TODO: don't be lazy; create vals and then the matrix instead of indexing in
+        #   (will have to uncomment num_nonzeros T_set line and if statement in for loop in _get_sparsity_pattern)
+        rows = self.sp_rows
+        cols = self.sp_cols
+        vals = np.zeros_like(rows, dtype=float)
+        self.K_glob = sp.csr_matrix((vals, (rows, cols)), shape=(nx * ny, nx * ny))
 
         # Loop over each element and put its local stiffness matrix in the global one
         for i in range(self.nx - 1):
@@ -170,7 +233,7 @@ class FEM(om.ImplicitComponent):
             for j in range(self.ny):
                 if np.isfinite(self.options["T_set"][i, j]):
                     idx_glob = self._flattened_node_ij(i, j)
-                    self.K_glob[idx_glob, :] = 0.0
+                    self.K_glob[idx_glob, cols[rows == idx_glob]] = 0.0
                     self.K_glob[idx_glob, idx_glob] = 1.0 * (not partial)
 
     def _update_global_force(self):
@@ -285,6 +348,116 @@ class FEM(om.ImplicitComponent):
             force += q * N.T * np.linalg.det(J)
 
         return force
+
+    def _get_sparsity_pattern(self):
+        """
+        Returns
+        -------
+        numpy array
+            Row indices of sparsity pattern
+        numpy array
+            Column indices of sparsity pattern
+        """
+        T_is_set = np.isfinite(self.options["T_set"])
+        nx = self.nx
+        ny = self.ny
+
+        # Figure out the number of nonzero elements in the sparse matrix
+        num_corners = 4
+        num_middle_edges = 2 * (nx - 2) + 2 * (ny - 2)
+        num_interiors = (nx - 2) * (ny - 2)
+
+        num_T_set_corners = 0
+        num_T_set_middle_edges = 0
+        num_T_set_interiors = 0
+        for i in range(nx):
+            for j in range(ny):
+                if T_is_set[i, j]:
+                    # Corners
+                    if (i == 0 or i == nx - 1) and (j == 0 or j == ny - 1):
+                        num_T_set_corners += 1
+
+                    # Middle edges
+                    elif i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
+                        num_T_set_middle_edges += 1
+
+                    else:
+                        num_T_set_interiors += 1
+
+        num_nonzeros = 4 * num_corners + 6 * num_middle_edges + 9 * num_interiors #- 3 * num_T_set_corners - 5 * num_T_set_middle_edges - 8 * num_T_set_interiors
+
+        # Initialize the arrays to store nonzero row and column indices
+        rows = np.zeros(num_nonzeros, dtype=int)
+        cols = np.zeros(num_nonzeros, dtype=int)
+
+        idx_nonzero = 0
+        for i in range(nx):
+            for j in range(ny):
+                idx_glob = self._flattened_node_ij(i, j)
+
+                # # If T of the current node is set, it only depends on itself (nonzero along diagonal)
+                # if T_is_set[i, j]:
+                #     rows[idx_nonzero] = idx_glob
+                #     cols[idx_nonzero] = idx_glob
+                #     idx_nonzero += 1
+                #     continue
+
+                # Influence of nodes to the left
+                if i > 0:
+                    # Down left
+                    if j > 0:
+                        rows[idx_nonzero] = idx_glob
+                        cols[idx_nonzero] = idx_glob - ny - 1
+                        idx_nonzero += 1
+                    
+                    # Directly left
+                    rows[idx_nonzero] = idx_glob
+                    cols[idx_nonzero] = idx_glob - ny
+                    idx_nonzero += 1
+
+                    # Up left
+                    if j < ny - 1:
+                        rows[idx_nonzero] = idx_glob
+                        cols[idx_nonzero] = idx_glob - ny + 1
+                        idx_nonzero += 1
+
+                # Down
+                if j > 0:
+                    rows[idx_nonzero] = idx_glob
+                    cols[idx_nonzero] = idx_glob - 1
+                    idx_nonzero += 1
+                
+                # Itself
+                rows[idx_nonzero] = idx_glob
+                cols[idx_nonzero] = idx_glob
+                idx_nonzero += 1
+
+                # Up
+                if j < ny - 1:
+                    rows[idx_nonzero] = idx_glob
+                    cols[idx_nonzero] = idx_glob + 1
+                    idx_nonzero += 1
+                
+                # Influence of nodes to the right
+                if i < nx - 1:
+                    # Down right
+                    if j > 0:
+                        rows[idx_nonzero] = idx_glob
+                        cols[idx_nonzero] = idx_glob + ny - 1
+                        idx_nonzero += 1
+                    
+                    # Directly right
+                    rows[idx_nonzero] = idx_glob
+                    cols[idx_nonzero] = idx_glob + ny
+                    idx_nonzero += 1
+
+                    # Up right
+                    if j < ny - 1:
+                        rows[idx_nonzero] = idx_glob
+                        cols[idx_nonzero] = idx_glob + ny + 1
+                        idx_nonzero += 1
+
+        return rows, cols
 
     def _flattened_node_ij(self, i, j):
         """
