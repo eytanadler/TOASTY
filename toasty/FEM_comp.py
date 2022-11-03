@@ -83,6 +83,7 @@ class FEM(om.ImplicitComponent):
         self.sp_rows, self.sp_cols = self._get_sparsity_pattern()
         self.K_glob = None
         self.density = np.zeros((nx - 1) * (ny - 1))
+        self._preprocess_global_stiffness()
         self._update_global_stiffness(np.ones((nx - 1) * (ny - 1)))
 
         # Set force vector to zero until user specifies nonzero heats
@@ -198,6 +199,65 @@ class FEM(om.ImplicitComponent):
             K_vals (4-element list with the four individual components?)
             idx_density_map (does this also need to be a 4-element list or only one?)
         """
+        nx, ny = (self.nx, self.ny)
+        n_elem = (nx - 1) * (ny - 1)
+        nodes_per_elem = 4
+
+        # Because we use meshgrid, all elements are the same size and shape,
+        # and we use the same thermal conductivity throughout. Thus, the local
+        # stiffness matrix is identical for each element.
+        K_loc = self._local_stiffness(0, 0)
+
+        # Global indices of the corner nodes of each element
+        i, j = np.meshgrid(np.arange(nx - 1), np.arange(ny - 1), indexing="ij")
+        i = i.flatten()
+        j = j.flatten()
+        #                         lower left  lower right       upper right           upper left
+        node_glob_idx = np.array([i * ny + j, (i + 1) * ny + j, (i + 1) * ny + j + 1, i * ny + j + 1, ])
+
+        self.K_rows = []
+        self.K_cols = []
+        self.K_vals = []
+        self.idx_density_map = []
+        for i_corner, corner_idx in enumerate(node_glob_idx):
+            self.K_rows.append(np.repeat(corner_idx, nodes_per_elem))
+            self.K_cols.append(node_glob_idx.T.flatten())
+            self.K_vals.append(np.tile(K_loc[i_corner, :], n_elem))
+            self.idx_density_map.append(np.repeat(np.arange(n_elem), nodes_per_elem))
+
+        # Account for the specified nodal temperatures.
+        # Start by setting the stiffness matrix values to have a one
+        # along the diagonal where the temperatures are specified.
+        T_is_set = np.isfinite(self.options["T_set"]).flatten()
+        diag_mask = np.zeros(n_elem * 4)
+        for i_corner in range(nodes_per_elem):
+            diag_mask *= 0
+            diag_mask[i_corner::nodes_per_elem] = 1
+            T_set_mask = np.repeat(T_is_set[node_glob_idx[i_corner]], nodes_per_elem)
+            self.K_vals[i_corner][T_set_mask] = 0.0
+
+            # Mask of the diagonals that must be set to ones
+            T_set_diag = np.logical_and(T_set_mask, diag_mask)
+
+            # The COO sparse matrix format will end up summing duplicate row and column values.
+            # To account for this, we must set any values that come up twice (middle edge nodes) to
+            # 0.5, any values that come up four times (interior nodes) to 0.25, and any values that
+            # come up once (corner nodes) to 1.0.
+            diag_glob_idx = node_glob_idx[i_corner][T_is_set[node_glob_idx[i_corner]]]  # glob idx of set nodes
+            diag_j = diag_glob_idx % ny  # i idx of set nodes
+            diag_i = (diag_glob_idx - diag_j) // ny  # j idx of set nodes
+            is_corner = ((diag_i == 0) | (diag_i == nx - 1)) & ((diag_j == 0) | (diag_j == ny - 1))
+            is_edge = ((diag_i == 0) | (diag_i == nx - 1) | (diag_j == 0) | (diag_j == ny - 1)) & np.logical_not(is_corner)
+            is_interior = np.logical_not(is_corner) & np.logical_not(is_edge)
+
+            # The indexing isn't pretty, but it's what must be done to avoid assigning values to a copy of K_vals
+            self.K_vals[i_corner][np.ix_(T_set_diag)[0][np.ix_(is_corner)]] = 1.0
+            self.K_vals[i_corner][np.ix_(T_set_diag)[0][np.ix_(is_edge)]] = 0.5
+            self.K_vals[i_corner][np.ix_(T_set_diag)[0][np.ix_(is_interior)]] = 0.25
+
+        # Now, remove zero values from the array
+        # TODO: it's something like this, but I need to remember to remove the density indices when it's a one on the diagonal
+        # np.delete(self.K_vals[0], np.ix_(self.K_vals[0] == 0.0)[0])
         pass
 
     def _update_global_stiffness(self, density, partial=False):
@@ -214,6 +274,12 @@ class FEM(om.ImplicitComponent):
             If using this function to compute partial derivatives, setting this to True
             will zero out rows where temperatures are specified.
         """
+        rows = np.array(self.K_rows).flatten()
+        cols = np.array(self.K_cols).flatten()
+        vals = np.array(self.K_vals).flatten() * density[self.idx_density_map].flatten()
+
+        self.K_glob_test = sp.coo_matrix((vals, (rows, cols))).tocsr()
+
         if not np.any(self.density != density):
             return
 

@@ -45,7 +45,7 @@ def callback_plot(x, fname=None):
 
 out_folder = os.path.join(cur_dir, "opt")
 
-d = 101
+d = 4
 nx = d
 ny = d
 n_elem = (nx - 1) * (ny - 1)
