@@ -57,21 +57,150 @@ class SingleElem(unittest.TestCase):
         # No heat added or removed, so all temps should be the temp of the set one
         np.testing.assert_allclose(self.T_set[0, 0], p.get_val("temp"))
 
-    def test_sparsity(self):
+
+class FourElem(unittest.TestCase):
+    """
+    Some unique cases with the set temperature in the interior now that we have an interior node.
+    """
+
+    def setUp(self):
+        self.nx = 3
+        self.ny = 3
+
+        self.T_set = np.full((self.nx, self.ny), np.inf)
+        self.T_set[1, 1] = 1.0  # set the interior temperature
+        self.q = np.zeros((self.nx - 1, self.ny - 1))
+        self.q[0, 0] = 1e3  # need to set some heat addition to prevent totally uniform temp field
+
+        self.p = om.Problem()
+        self.fem = self.p.model.add_subsystem(
+            "fem", FEM(num_x=self.nx, num_y=self.ny, T_set=self.T_set, q=self.q), promotes=["*"]
+        )
+
+        self.rand = np.random.default_rng(314)
+
+    def test_set_temp_interior(self):
         """
-        One element global stiffness is DENSE.
+        Regression test on stiffness matrix.
         """
-        p = om.Problem()
-        fem = p.model = FEM(num_x=self.nx, num_y=self.ny, T_set=self.T_set, q=self.q)
-        p.setup()
+        self.p.setup()
+        self.p.run_model()
 
-        idx_i = np.repeat(np.arange(self.nx * self.ny), 4)
-        idx_j = np.repeat(np.arange(self.nx * self.ny).reshape(4, 1), 4, axis=1).T.flatten()
+        K_glob = np.array(
+            [
+                [
+                    6.66666667e02,
+                    -1.66666667e02,
+                    0.00000000e00,
+                    -1.66666667e02,
+                    -3.33333333e02,
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                ],
+                [
+                    -1.66666667e02,
+                    1.33333333e03,
+                    -1.66666667e02,
+                    -3.33333333e02,
+                    -3.33333333e02,
+                    -3.33333333e02,
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                ],
+                [
+                    0.00000000e00,
+                    -1.66666667e02,
+                    6.66666667e02,
+                    0.00000000e00,
+                    -3.33333333e02,
+                    -1.66666667e02,
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                ],
+                [
+                    -1.66666667e02,
+                    -3.33333333e02,
+                    0.00000000e00,
+                    1.33333333e03,
+                    -3.33333333e02,
+                    0.00000000e00,
+                    -1.66666667e02,
+                    -3.33333333e02,
+                    0.00000000e00,
+                ],
+                [
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                    1.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                ],
+                [
+                    0.00000000e00,
+                    -3.33333333e02,
+                    -1.66666667e02,
+                    0.00000000e00,
+                    -3.33333333e02,
+                    1.33333333e03,
+                    0.00000000e00,
+                    -3.33333333e02,
+                    -1.66666667e02,
+                ],
+                [
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                    -1.66666667e02,
+                    -3.33333333e02,
+                    0.00000000e00,
+                    6.66666667e02,
+                    -1.66666667e02,
+                    0.00000000e00,
+                ],
+                [
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                    -3.33333333e02,
+                    -3.33333333e02,
+                    -3.33333333e02,
+                    -1.66666667e02,
+                    1.33333333e03,
+                    -1.66666667e02,
+                ],
+                [
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                    0.00000000e00,
+                    -3.33333333e02,
+                    -1.66666667e02,
+                    0.00000000e00,
+                    -1.66666667e02,
+                    6.66666667e02,
+                ],
+            ]
+        )
 
-        np.testing.assert_allclose(idx_i, fem.sp_rows)
-        np.testing.assert_allclose(idx_j, fem.sp_cols)
+        np.testing.assert_allclose(K_glob, self.fem.K_glob.toarray())
 
-    # TODO: test that when temps are set the sparsity accounts for the changes
+    def test_check_partials(self):
+        """
+        Check that partial derivatives when an interior temperature is set.
+        """
+        self.p.setup()
+        self.p.set_val("density", self.rand.random((self.nx - 1) * (self.ny - 1)))
+        self.p.run_model()
+
+        om_assert.assert_check_partials(self.p.check_partials(), atol=5e-6, rtol=5e-8)
 
 
 class NineElem(unittest.TestCase):

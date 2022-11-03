@@ -3,13 +3,13 @@ import scipy.sparse as sp
 import openmdao.api as om
 from .utils import gen_mesh
 from collections.abc import Iterable
+from time import time
 
-from scipy.sparse.linalg import spsolve
-# try:
-#     from pypardiso import spsolve
-# except ImportError:
-#     print("Install pypardiso for faster linear solves, falling back to scipy")
-#     from scipy.sparse.linalg import spsolve
+try:
+    from pypardiso import spsolve
+except ImportError:
+    print("Install pypardiso for faster linear solves, falling back to scipy")
+    from scipy.sparse.linalg import spsolve
 
 
 class FEM(om.ImplicitComponent):
@@ -80,90 +80,77 @@ class FEM(om.ImplicitComponent):
             self.N.append(FEM._N(xi, eta))
 
         # Stiffness matrix
-        self.sp_rows, self.sp_cols = self._get_sparsity_pattern()
-        self.K_glob = None
         self.density = np.zeros((nx - 1) * (ny - 1))
         self._preprocess_global_stiffness()
         self._update_global_stiffness(np.ones((nx - 1) * (ny - 1)))
+
+        # Also set up the necessary info to efficiently get partial(R)/partial(x)
+        self._preprocess_pRpx()
 
         # Set force vector to zero until user specifies nonzero heats
         self.F_glob = np.zeros((nx * ny, 1), dtype=float)
         self._update_global_force()
 
     def apply_nonlinear(self, inputs, outputs, residuals):
-        print("apply_nonlinear")
+        print("apply_nonlinear...", end="")
+        t_start = time()
         self._update_global_stiffness(inputs["density"])
         residuals["temp"] = self.K_glob @ outputs["temp"] - self.F_glob.flatten()
+        print(f"done in {time() - t_start} sec")
 
     def solve_nonlinear(self, inputs, outputs):
-        print("solve_nonlinear")
+        print("solve_nonlinear...", end="")
+        t_start = time()
         self._update_global_stiffness(inputs["density"])
         outputs["temp"] = spsolve(self.K_glob, self.F_glob)
+        print(f"done in {time() - t_start} sec")
 
     def linearize(self, inputs, outputs, _):
-        print("linearize")
+        print("linearize...", end="")
+        t_start = time()
+
+        # Matrix for partial(residual)/partial(temperature)
         self._update_global_stiffness(inputs["density"])
         self.pRpu = self.K_glob
 
-        # Loop over each element and brute force the derivatives w.r.t. density
-        self.pRpx = np.zeros((self.nx * self.ny, (self.nx - 1) * (self.ny - 1)))
+        # Matrix for partial(residual)/partial(density)
+        pRpx_temp_mat = sp.csr_matrix((outputs["temp"][self.pRpx_temp_idx], (self.pRpx_temp_rows, self.pRpx_temp_cols)))
+        self.pRpx = self.pRpx_coeff_mat.dot(pRpx_temp_mat)
 
-        # Because we use meshgrid, all elements are the same size and shape,
-        # and we use the same thermal conductivity throughout. Thus, the local
-        # stiffness matrix is identical for each element.
-        K_loc = self._local_stiffness(0, 0)
-
-        idx_elem = 0
-        for i in range(self.nx - 1):
-            for j in range(self.ny - 1):
-                # 2D indices in the mesh of the nodes surrounding the current element
-                idx = np.array(
-                    [
-                        [i, j],
-                        [i + 1, j],
-                        [i + 1, j + 1],
-                        [i, j + 1],
-                    ]
-                )
-
-                # Convert the 2D indices to flattened 1D to determine where in the
-                # unknown vector (and global stiffness matrix) they'd be
-                idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
-
-                self.pRpx[idx_glob, idx_elem] += K_loc @ outputs["temp"][idx_glob]
-                idx_elem += 1
-
-        # Any temperatures that are specified get a one along the diagonal and zeros otherwise in K
-        for i in range(self.nx):
-            for j in range(self.ny):
-                if np.isfinite(self.options["T_set"][i, j]):
-                    idx_glob = self._flattened_node_ij(i, j)
-                    self.pRpx[idx_glob, :] = 0.0
+        print(f"done in {time() - t_start} sec")
 
     def apply_linear(self, inputs, outputs, d_inputs, d_outputs, d_residuals, mode):
         if "temp" not in d_residuals:
             return
 
         if mode == "fwd":
-            print("apply_linear fwd")
+            print("apply_linear fwd...", end="")
+            t_start = time()
             if "temp" in d_outputs:
                 d_residuals["temp"] += self.pRpu @ d_outputs["temp"]
             if "density" in d_inputs:
                 d_residuals["temp"] += self.pRpx @ d_inputs["density"]
         elif mode == "rev":
-            print("apply_linear rev")
+            print("apply_linear rev...", end="")
+            t_start = time()
             if "temp" in d_outputs:
                 d_outputs["temp"] += self.pRpu.T @ d_residuals["temp"]
             if "density" in d_inputs:
                 d_inputs["density"] += self.pRpx.T @ d_residuals["temp"]
 
+        print(f"done in {time() - t_start} sec")
+
     def solve_linear(self, d_outputs, d_residuals, mode):
         if mode == "fwd":
-            print("solve_linear fwd")
+            print("solve_linear fwd...", end="")
+            t_start = time()
             d_outputs["temp"] = spsolve(self.pRpu, d_residuals["temp"])
         elif mode == "rev":
-            print("solve_linear rev")
+            print("solve_linear rev...", end="")
+            t_start = time()
             d_residuals["temp"] = spsolve(self.pRpu, d_outputs["temp"])
+
+        print(f"done in {time() - t_start} sec")
 
     def get_mesh(self):
         """
@@ -177,90 +164,8 @@ class FEM(om.ImplicitComponent):
             Matrix of y coordinates
         """
         return self.mesh_x, self.mesh_y
-    
-    def _preprocess_global_stiffness(self):
-        """
-        By splitting up the global stiffness matrix into four components where there is no
-        overlap of elements at any spot in the matrix, we can avoid doing the global stiffness
-        matrix assembly every time the densities change. Instead, we simple have to multiply the
-        correct spots in the four components by the associated densities and use the resulting
-        values to initialize a sparse matrix.
 
-        This method creates those four components of the stiffness matrix, along with the associated
-        rows and columns of the values. It also creates the index map that defines which densities
-        to multiply each element the four components by. Because it depends only on the mesh and
-        temperature boundary conditions (which are defined once at the beginning), this method
-        must run only once at the start of the evaluation/optimization.
-
-        The member variables this function adds are:
-            TODO
-            K_rows
-            K_cols
-            K_vals (4-element list with the four individual components?)
-            idx_density_map (does this also need to be a 4-element list or only one?)
-        """
-        nx, ny = (self.nx, self.ny)
-        n_elem = (nx - 1) * (ny - 1)
-        nodes_per_elem = 4
-
-        # Because we use meshgrid, all elements are the same size and shape,
-        # and we use the same thermal conductivity throughout. Thus, the local
-        # stiffness matrix is identical for each element.
-        K_loc = self._local_stiffness(0, 0)
-
-        # Global indices of the corner nodes of each element
-        i, j = np.meshgrid(np.arange(nx - 1), np.arange(ny - 1), indexing="ij")
-        i = i.flatten()
-        j = j.flatten()
-        #                         lower left  lower right       upper right           upper left
-        node_glob_idx = np.array([i * ny + j, (i + 1) * ny + j, (i + 1) * ny + j + 1, i * ny + j + 1, ])
-
-        self.K_rows = []
-        self.K_cols = []
-        self.K_vals = []
-        self.idx_density_map = []
-        for i_corner, corner_idx in enumerate(node_glob_idx):
-            self.K_rows.append(np.repeat(corner_idx, nodes_per_elem))
-            self.K_cols.append(node_glob_idx.T.flatten())
-            self.K_vals.append(np.tile(K_loc[i_corner, :], n_elem))
-            self.idx_density_map.append(np.repeat(np.arange(n_elem), nodes_per_elem))
-
-        # Account for the specified nodal temperatures.
-        # Start by setting the stiffness matrix values to have a one
-        # along the diagonal where the temperatures are specified.
-        T_is_set = np.isfinite(self.options["T_set"]).flatten()
-        diag_mask = np.zeros(n_elem * 4)
-        for i_corner in range(nodes_per_elem):
-            diag_mask *= 0
-            diag_mask[i_corner::nodes_per_elem] = 1
-            T_set_mask = np.repeat(T_is_set[node_glob_idx[i_corner]], nodes_per_elem)
-            self.K_vals[i_corner][T_set_mask] = 0.0
-
-            # Mask of the diagonals that must be set to ones
-            T_set_diag = np.logical_and(T_set_mask, diag_mask)
-
-            # The COO sparse matrix format will end up summing duplicate row and column values.
-            # To account for this, we must set any values that come up twice (middle edge nodes) to
-            # 0.5, any values that come up four times (interior nodes) to 0.25, and any values that
-            # come up once (corner nodes) to 1.0.
-            diag_glob_idx = node_glob_idx[i_corner][T_is_set[node_glob_idx[i_corner]]]  # glob idx of set nodes
-            diag_j = diag_glob_idx % ny  # i idx of set nodes
-            diag_i = (diag_glob_idx - diag_j) // ny  # j idx of set nodes
-            is_corner = ((diag_i == 0) | (diag_i == nx - 1)) & ((diag_j == 0) | (diag_j == ny - 1))
-            is_edge = ((diag_i == 0) | (diag_i == nx - 1) | (diag_j == 0) | (diag_j == ny - 1)) & np.logical_not(is_corner)
-            is_interior = np.logical_not(is_corner) & np.logical_not(is_edge)
-
-            # The indexing isn't pretty, but it's what must be done to avoid assigning values to a copy of K_vals
-            self.K_vals[i_corner][np.ix_(T_set_diag)[0][np.ix_(is_corner)]] = 1.0
-            self.K_vals[i_corner][np.ix_(T_set_diag)[0][np.ix_(is_edge)]] = 0.5
-            self.K_vals[i_corner][np.ix_(T_set_diag)[0][np.ix_(is_interior)]] = 0.25
-
-        # Now, remove zero values from the array
-        # TODO: it's something like this, but I need to remember to remove the density indices when it's a one on the diagonal
-        # np.delete(self.K_vals[0], np.ix_(self.K_vals[0] == 0.0)[0])
-        pass
-
-    def _update_global_stiffness(self, density, partial=False):
+    def _update_global_stiffness(self, density):
         """
         Set up the global stiffness matrix and store it in self.K_glob (overwrites).
 
@@ -270,67 +175,22 @@ class FEM(om.ImplicitComponent):
             Densities of each element, which can remove/add elements to the problem
             by scaling their thermal conductivity. The shape corresponds to the flattened
             2D array of elements. By default 1 for every element.
-        partial : bool, optional
-            If using this function to compute partial derivatives, setting this to True
-            will zero out rows where temperatures are specified.
         """
-        rows = np.array(self.K_rows).flatten()
-        cols = np.array(self.K_cols).flatten()
-        vals = np.array(self.K_vals).flatten() * density[self.idx_density_map].flatten()
-
-        self.K_glob_test = sp.coo_matrix((vals, (rows, cols))).tocsr()
-
+        # If density hasn't changed, no need to update it
         if not np.any(self.density != density):
             return
-
         self.density[:] = density[:]
 
-        nx, ny = (self.nx, self.ny)
-        dens_mat = np.reshape(density, (nx - 1, ny - 1))
+        vals = self.K_vals.copy()
+        vals[self.idx_val_map] *= density[self.idx_density_map]
 
-        # Because we use meshgrid, all elements are the same size and shape,
-        # and we use the same thermal conductivity throughout. Thus, the local
-        # stiffness matrix is identical for each element.
-        K_loc = self._local_stiffness(0, 0)
-
-        # Initialize sparse matrix
-        # TODO: don't be lazy; create vals and then the matrix instead of indexing in
-        #   (will have to uncomment num_nonzeros T_set line and if statement in for loop in _get_sparsity_pattern)
-        rows = self.sp_rows
-        cols = self.sp_cols
-        vals = np.zeros_like(rows, dtype=float)
-        self.K_glob = sp.csr_matrix((vals, (rows, cols)), shape=(nx * ny, nx * ny))
-
-        # Loop over each element and put its local stiffness matrix in the global one
-        for i in range(self.nx - 1):
-            for j in range(self.ny - 1):
-                # 2D indices in the mesh of the nodes surrounding the current element
-                idx = np.array(
-                    [
-                        [i, j],
-                        [i + 1, j],
-                        [i + 1, j + 1],
-                        [i, j + 1],
-                    ]
-                )
-
-                # Convert the 2D indices to flattened 1D to determine where in the
-                # unknown vector (and global stiffness matrix) they'd be
-                idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
-
-                self.K_glob[np.ix_(idx_glob, idx_glob)] += dens_mat[i, j] * K_loc
-
-        # Any temperatures that are specified get a one along the diagonal and zeros otherwise in K
-        for i in range(self.nx):
-            for j in range(self.ny):
-                if np.isfinite(self.options["T_set"][i, j]):
-                    idx_glob = self._flattened_node_ij(i, j)
-                    self.K_glob[idx_glob, cols[rows == idx_glob]] = 0.0
-                    self.K_glob[idx_glob, idx_glob] = 1.0 * (not partial)
+        self.K_glob = sp.coo_matrix((vals, (self.K_rows, self.K_cols))).tocsr()
 
     def _update_global_force(self):
         """
         Set up the global force vector and store it in self.F_glob (overwrites).
+        This is a pretty lazy way of doing it, but it only happens once at the beginning,
+        so it's not a big deal.
         """
         self.F_glob *= 0  # reset global stiffness matrix
 
@@ -358,6 +218,186 @@ class FEM(om.ImplicitComponent):
             for j in range(self.ny):
                 if np.isfinite(self.options["T_set"][i, j]):
                     self.F_glob[self._flattened_node_ij(i, j)] = self.options["T_set"][i, j]
+
+    def _preprocess_global_stiffness(self):
+        """
+        By splitting up the global stiffness matrix into four components where there is no
+        overlap of elements at any spot in the matrix, we can avoid doing the global stiffness
+        matrix assembly every time the densities change. Instead, we simple have to multiply the
+        correct spots in the four components by the associated densities and use the resulting
+        values to initialize a sparse matrix.
+
+        This method creates those four components of the stiffness matrix, along with the associated
+        rows and columns of the values. It also creates the index map that defines which densities
+        to multiply each element the four components by. Because it depends only on the mesh and
+        temperature boundary conditions (which are defined once at the beginning), this method
+        must run only once at the start of the evaluation/optimization.
+
+        Creating the stifness matrix will look something like this:
+            vals = self.K_vals.copy()
+            vals[self.idx_val_map] *= density[self.idx_density_map]
+            self.K_glob = sp.coo_matrix((vals, (self.K_rows, self.K_cols))).tocsr()
+
+        The member variables this function adds are:
+            K_rows
+            K_cols
+            K_vals
+            idx_density_map
+            idx_val_map
+        """
+        nx, ny = (self.nx, self.ny)
+        n_elem = (nx - 1) * (ny - 1)
+        nodes_per_elem = 4
+
+        # Because we use meshgrid, all elements are the same size and shape,
+        # and we use the same thermal conductivity throughout. Thus, the local
+        # stiffness matrix is identical for each element.
+        K_loc = self._local_stiffness(0, 0)
+
+        # Global indices of the corner nodes of each element
+        i, j = np.meshgrid(np.arange(nx - 1), np.arange(ny - 1), indexing="ij")
+        i = i.flatten()
+        j = j.flatten()
+        node_glob_idx = np.array(
+            [
+                i * ny + j,  # lower left
+                (i + 1) * ny + j,  # lower right
+                (i + 1) * ny + j + 1,  # upper right
+                i * ny + j + 1,  # upper left
+            ]
+        )
+
+        self.K_rows = []
+        self.K_cols = []
+        self.K_vals = []
+        self.idx_density_map = []
+        self.idx_val_map = []
+        for i_corner, corner_idx in enumerate(node_glob_idx):
+            self.K_rows.append(np.repeat(corner_idx, nodes_per_elem))
+            self.K_cols.append(node_glob_idx.T.flatten())
+            self.K_vals.append(np.tile(K_loc[i_corner, :], n_elem))
+            self.idx_density_map.append(np.repeat(np.arange(n_elem), nodes_per_elem))
+            self.idx_val_map.append(np.arange(n_elem * nodes_per_elem) + n_elem * nodes_per_elem * i_corner)
+
+        # Account for the specified nodal temperatures.
+        # Start by setting the stiffness matrix values to have a one
+        # along the diagonal where the temperatures are specified.
+        T_is_set = np.isfinite(self.options["T_set"]).flatten()
+        diag_mask = np.zeros(n_elem * 4)
+        for i_corner in range(nodes_per_elem):
+            diag_mask *= 0
+            diag_mask[i_corner::nodes_per_elem] = 1
+            T_set_mask = np.repeat(T_is_set[node_glob_idx[i_corner]], nodes_per_elem)
+            self.K_vals[i_corner][T_set_mask] = 0.0
+
+            # Mask of the diagonals that must be set to ones
+            T_set_diag = np.logical_and(T_set_mask, diag_mask)
+
+            # The COO sparse matrix format will end up summing duplicate row and column values.
+            # To account for this, we must set any values that come up twice (middle edge nodes) to
+            # 0.5, any values that come up four times (interior nodes) to 0.25, and any values that
+            # come up once (corner nodes) to 1.0.
+            diag_glob_idx = node_glob_idx[i_corner][T_is_set[node_glob_idx[i_corner]]]  # glob idx of set nodes
+            diag_j = diag_glob_idx % ny  # i idx of set nodes
+            diag_i = (diag_glob_idx - diag_j) // ny  # j idx of set nodes
+            is_corner = ((diag_i == 0) | (diag_i == nx - 1)) & ((diag_j == 0) | (diag_j == ny - 1))
+            is_edge = ((diag_i == 0) | (diag_i == nx - 1) | (diag_j == 0) | (diag_j == ny - 1)) & np.logical_not(
+                is_corner
+            )
+            is_interior = np.logical_not(is_corner) & np.logical_not(is_edge)
+
+            # The indexing isn't pretty, but it's what must be done to avoid assigning values to a copy of K_vals
+            self.K_vals[i_corner][np.ix_(T_set_diag)[0][np.ix_(is_corner)]] = 1.0
+            self.K_vals[i_corner][np.ix_(T_set_diag)[0][np.ix_(is_edge)]] = 0.5
+            self.K_vals[i_corner][np.ix_(T_set_diag)[0][np.ix_(is_interior)]] = 0.25
+
+            # Remove any indices from the val and density maps that correspond to the ones along the diagonal since
+            # those are not multiplied by density. The indices we've zeroed out will be removed in a sec, hold your horses.
+            self.idx_density_map[i_corner] = np.delete(self.idx_density_map[i_corner], np.ix_(T_set_diag)[0])
+            self.idx_val_map[i_corner] = np.delete(self.idx_val_map[i_corner], np.ix_(T_set_diag)[0])
+
+        # TODO: maybe give a shot at removing zero-valued spots in the matrix?
+
+        # Flatten the values
+        self.K_rows = np.array(self.K_rows).flatten()
+        self.K_cols = np.array(self.K_cols).flatten()
+        self.K_vals = np.array(self.K_vals).flatten()
+        self.idx_val_map = np.hstack(self.idx_val_map)
+        self.idx_density_map = np.hstack(self.idx_density_map)
+
+    def _preprocess_pRpx(self):
+        """
+        Compute the sparse matrices and other data necessary to efficiently compute the partial
+        derivative of the residuals with respect to the densities. These matrices are dependent
+        only on the mesh and which temperatures are set, so this must be called only once at the
+        beginning.
+
+        The approach used here will compute the pRpx matrix by multiplying two sparse matrices.
+        The first sparse matrix contains copies of the local stiffness matrix. It does not depend
+        on density or temperature, so it is fully definied when this function is called. The second
+        sparse matrix is the temperatures arranged so that when multiplied by the first it returns
+        pRpx. The temperatures will change at runtime, so here we define the rows and columns
+        that define the second matrix's sparsity. We also define the indices from the temperature
+        that return the values for the sparse matrix.
+
+        Computing pRpx after calling this function will look something like:
+
+            pRpx_temp_mat = sp.csr_matrix((outputs["temp"][self.pRpx_temp_idx], (self.pRpx_temp_rows, self.pRpx_temp_cols)))
+            pRpx = self.pRpx_coeff_mat.dot(pRpx_temp_mat)
+
+        The member variables this functions adds are:
+            pRpx_coeff_mat
+            pRpx_temp_idx
+            pRpx_temp_rows
+            pRpx_temp_cols
+        """
+        nx, ny = (self.nx, self.ny)
+        n_elem = (nx - 1) * (ny - 1)
+        nodes_per_elem = 4
+
+        # Because we use meshgrid, all elements are the same size and shape,
+        # and we use the same thermal conductivity throughout. Thus, the local
+        # stiffness matrix is identical for each element.
+        K_loc = self._local_stiffness(0, 0)
+
+        # Rearrange K_loc so instead of being ordered by the nodes of an element CCW,
+        # they're ordered lower left, upper left, lower right, and upper right because
+        # this is the ordering used in the global indexing
+        idx_reorder_K = [0, 3, 1, 2]
+        K_loc = K_loc[np.ix_(idx_reorder_K, idx_reorder_K)]
+
+        # Global indices of the corners of the elements. This ordering is not CCW as it is in some other places!
+        i, j = np.meshgrid(np.arange(nx - 1), np.arange(ny - 1), indexing="ij")
+        i = i.flatten()
+        j = j.flatten()
+        #                          lower left  upper left      lower right       upper right
+        nodal_glob_idx = np.array([i * ny + j, i * ny + j + 1, (i + 1) * ny + j, (i + 1) * ny + j + 1])
+
+        # The rows and columns are ordered such that they iterate over each element's K matrix (after being reordered)
+        # starting at the top left, going through each row left to right, then to the next row and repeat
+        coeff_mat_rows = np.repeat(nodal_glob_idx.T, nodes_per_elem)
+        coeff_mat_cols = np.tile(np.arange(nodes_per_elem), n_elem * nodes_per_elem) + np.repeat(
+            np.arange(n_elem) * nodes_per_elem, nodes_per_elem**2
+        )
+        coeff_mat_vals = np.tile(K_loc.flatten(), n_elem)
+
+        # Remove any rows where the temperature is set
+        T_is_set = np.isfinite(self.options["T_set"]).flatten()
+        idx_where_T_is_set = np.argwhere(T_is_set).flatten()
+        idx_to_remove = np.in1d(coeff_mat_rows, idx_where_T_is_set)
+        coeff_mat_rows = np.delete(coeff_mat_rows, idx_to_remove)
+        coeff_mat_cols = np.delete(coeff_mat_cols, idx_to_remove)
+        coeff_mat_vals = np.delete(coeff_mat_vals, idx_to_remove)
+
+        # Finally, we have the pRpx coefficient matrix!
+        self.pRpx_coeff_mat = sp.csr_matrix(
+            (coeff_mat_vals, (coeff_mat_rows, coeff_mat_cols)), shape=(nx * ny, n_elem * nodes_per_elem)
+        )
+
+        # Set up the stuff for the pRpx temperature matrix
+        self.pRpx_temp_rows = np.arange(n_elem * nodes_per_elem, dtype=int)
+        self.pRpx_temp_cols = np.repeat(np.arange(n_elem, dtype=int), nodes_per_elem)
+        self.pRpx_temp_idx = nodal_glob_idx.T.flatten()
 
     def _local_stiffness(self, i, j):
         """
@@ -440,118 +480,6 @@ class FEM(om.ImplicitComponent):
             force += q * N.T * np.linalg.det(J)
 
         return force
-
-    def _get_sparsity_pattern(self):
-        """
-        Returns
-        -------
-        numpy array
-            Row indices of sparsity pattern
-        numpy array
-            Column indices of sparsity pattern
-        """
-        T_is_set = np.isfinite(self.options["T_set"])
-        nx = self.nx
-        ny = self.ny
-
-        # Figure out the number of nonzero elements in the sparse matrix
-        num_corners = 4
-        num_middle_edges = 2 * (nx - 2) + 2 * (ny - 2)
-        num_interiors = (nx - 2) * (ny - 2)
-
-        num_T_set_corners = 0
-        num_T_set_middle_edges = 0
-        num_T_set_interiors = 0
-        for i in range(nx):
-            for j in range(ny):
-                if T_is_set[i, j]:
-                    # Corners
-                    if (i == 0 or i == nx - 1) and (j == 0 or j == ny - 1):
-                        num_T_set_corners += 1
-
-                    # Middle edges
-                    elif i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
-                        num_T_set_middle_edges += 1
-
-                    else:
-                        num_T_set_interiors += 1
-
-        num_nonzeros = (
-            4 * num_corners + 6 * num_middle_edges + 9 * num_interiors
-        )  # - 3 * num_T_set_corners - 5 * num_T_set_middle_edges - 8 * num_T_set_interiors
-
-        # Initialize the arrays to store nonzero row and column indices
-        rows = np.zeros(num_nonzeros, dtype=int)
-        cols = np.zeros(num_nonzeros, dtype=int)
-
-        idx_nonzero = 0
-        for i in range(nx):
-            for j in range(ny):
-                idx_glob = self._flattened_node_ij(i, j)
-
-                # # If T of the current node is set, it only depends on itself (nonzero along diagonal)
-                # if T_is_set[i, j]:
-                #     rows[idx_nonzero] = idx_glob
-                #     cols[idx_nonzero] = idx_glob
-                #     idx_nonzero += 1
-                #     continue
-
-                # Influence of nodes to the left
-                if i > 0:
-                    # Down left
-                    if j > 0:
-                        rows[idx_nonzero] = idx_glob
-                        cols[idx_nonzero] = idx_glob - ny - 1
-                        idx_nonzero += 1
-
-                    # Directly left
-                    rows[idx_nonzero] = idx_glob
-                    cols[idx_nonzero] = idx_glob - ny
-                    idx_nonzero += 1
-
-                    # Up left
-                    if j < ny - 1:
-                        rows[idx_nonzero] = idx_glob
-                        cols[idx_nonzero] = idx_glob - ny + 1
-                        idx_nonzero += 1
-
-                # Down
-                if j > 0:
-                    rows[idx_nonzero] = idx_glob
-                    cols[idx_nonzero] = idx_glob - 1
-                    idx_nonzero += 1
-
-                # Itself
-                rows[idx_nonzero] = idx_glob
-                cols[idx_nonzero] = idx_glob
-                idx_nonzero += 1
-
-                # Up
-                if j < ny - 1:
-                    rows[idx_nonzero] = idx_glob
-                    cols[idx_nonzero] = idx_glob + 1
-                    idx_nonzero += 1
-
-                # Influence of nodes to the right
-                if i < nx - 1:
-                    # Down right
-                    if j > 0:
-                        rows[idx_nonzero] = idx_glob
-                        cols[idx_nonzero] = idx_glob + ny - 1
-                        idx_nonzero += 1
-
-                    # Directly right
-                    rows[idx_nonzero] = idx_glob
-                    cols[idx_nonzero] = idx_glob + ny
-                    idx_nonzero += 1
-
-                    # Up right
-                    if j < ny - 1:
-                        rows[idx_nonzero] = idx_glob
-                        cols[idx_nonzero] = idx_glob + ny + 1
-                        idx_nonzero += 1
-
-        return rows, cols
 
     def _flattened_node_ij(self, i, j):
         """

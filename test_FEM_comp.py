@@ -43,9 +43,9 @@ def callback_plot(x, fname=None):
     plt.close(fig)
 
 
-out_folder = os.path.join(cur_dir, "opt")
+out_folder = os.path.join(cur_dir, "opt_1mil_init0p5")
 
-d = 4
+d = 1001
 nx = d
 ny = d
 n_elem = (nx - 1) * (ny - 1)
@@ -81,14 +81,15 @@ prob.model.add_subsystem(
 )
 
 prob.model.add_objective("mass")
-prob.model.add_design_var("density_dv", lower=1e-6, upper=1.0)
-prob.model.add_constraint("max_temp", upper=600)
+prob.model.add_design_var("density_dv", lower=1e-2, upper=1.0)
+prob.model.add_constraint("max_temp", upper=400)
 
 prob.driver = om.pyOptSparseDriver(optimizer="SNOPT")
 os.makedirs(out_folder, exist_ok=True)
 prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
 prob.driver.options["debug_print"] = ["objs", "nl_cons"]  # desvars, nl_cons, ln_cons, objs, totals
 prob.driver.opt_settings["Iterations limit"] = 1e7
+prob.driver.opt_settings["Minor iterations limit"] = 10000
 prob.driver.opt_settings["Major iterations limit"] = 5000
 # prob.driver.opt_settings["Violation limit"] = 1e4
 prob.driver.opt_settings["Major optimality tolerance"] = 1e-5
@@ -101,6 +102,8 @@ prob.driver.opt_settings["snSTOP function handle"] = callback_plot
 prob.driver.opt_settings["Verify level"] = 0
 
 prob.setup(mode="rev")
+
+prob.set_val("density_dv", 0.5**(1/3))  # initialize density to 0.5
 
 mesh_x, mesh_y = fem.get_mesh()
 
