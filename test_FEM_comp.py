@@ -42,8 +42,15 @@ def callback_plot(x, fname=None):
         fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
+# USER INPUTS
+out_folder = os.path.join(cur_dir, "opt")
 
-out_folder = os.path.join(cur_dir, "opt_1mil_init0p5")
+min_compliance_problem = False
+mass_frac = 0.1
+
+# Proper SIMP for min compliance problem (required to make linear mass constraint)
+# mass_density_in = "density_dv" if min_compliance_problem else "density"
+mass_density_in = "density_dv"
 
 d = 1001
 nx = d
@@ -65,7 +72,7 @@ prob.model.add_subsystem(
     "simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes_inputs=["density_dv"], promotes_outputs=["density"]
 )
 prob.model.add_subsystem(
-    "calc_mass", Mass(num_x=nx, num_y=ny), promotes_inputs=[("density", "density")], promotes_outputs=["mass"]
+    "calc_mass", Mass(num_x=nx, num_y=ny), promotes_inputs=[("density", mass_density_in)], promotes_outputs=["mass"]
 )
 fem = prob.model.add_subsystem(
     "fem",
@@ -75,35 +82,57 @@ fem = prob.model.add_subsystem(
 )
 prob.model.add_subsystem(
     "calc_max_temp",
-    om.KSComp(width=nx * ny, rho=50.0),
+    om.KSComp(width=nx * ny, rho=10.0),
     promotes_inputs=[("g", "temp")],
     promotes_outputs=[("KS", "max_temp")],
 )
 
-prob.model.add_objective("mass")
-prob.model.add_design_var("density_dv", lower=1e-2, upper=1.0)
-prob.model.add_constraint("max_temp", upper=400)
+if min_compliance_problem:
+    prob.model.add_objective("max_temp")
+    prob.model.add_design_var("density_dv", lower=1e-2, upper=1.0)
+    prob.model.add_constraint("mass", upper=mass_frac * n_elem, linear=True)
+else:
+    prob.model.add_objective("mass")
+    prob.model.add_design_var("density_dv", lower=1e-2, upper=1.0)
+    prob.model.add_constraint("max_temp", upper=400)
+
+os.makedirs(out_folder, exist_ok=True)
 
 prob.driver = om.pyOptSparseDriver(optimizer="SNOPT")
-os.makedirs(out_folder, exist_ok=True)
 prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
-prob.driver.options["debug_print"] = ["objs", "nl_cons"]  # desvars, nl_cons, ln_cons, objs, totals
-prob.driver.opt_settings["Iterations limit"] = 1e7
-prob.driver.opt_settings["Minor iterations limit"] = 10000
-prob.driver.opt_settings["Major iterations limit"] = 5000
-# prob.driver.opt_settings["Violation limit"] = 1e4
+prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
+prob.driver.opt_settings["Iterations limit"] = 1e9
+prob.driver.opt_settings["Minor iterations limit"] = 50_000
+prob.driver.opt_settings["New superbasics limit"] = 5_000
+prob.driver.opt_settings["Major iterations limit"] = 5_000
+prob.driver.opt_settings["Violation limit"] = 1e4
 prob.driver.opt_settings["Major optimality tolerance"] = 1e-5
 prob.driver.opt_settings["Major feasibility tolerance"] = 1e-7
 prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
 prob.driver.opt_settings["Summary file"] = os.path.join(out_folder, "SNOPT_summary.out")
 prob.driver.opt_settings["snSTOP function handle"] = callback_plot
-# prob.driver.opt_settings["New superbasics limit"] = 10000
-# prob.driver.opt_settings["Hessian"] = "full memory"
+prob.driver.opt_settings["Hessian updates"] = 500
 prob.driver.opt_settings["Verify level"] = 0
+
+# prob.driver = om.pyOptSparseDriver(optimizer="IPOPT")
+# prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
+# prob.driver.opt_settings["max_iter"] = 1000
+# prob.driver.opt_settings["constr_viol_tol"] = 1e-6
+# prob.driver.opt_settings["nlp_scaling_method"] = "gradient-based"
+# prob.driver.opt_settings["acceptable_tol"] = 1e-5
+# prob.driver.opt_settings["acceptable_iter"] = 0
+# prob.driver.opt_settings["tol"] = 1e-5
+# prob.driver.opt_settings["mu_strategy"] = "adaptive"
+# prob.driver.opt_settings["corrector_type"] = "affine"
+# prob.driver.opt_settings["limited_memory_max_history"] = 100
+# prob.driver.opt_settings["corrector_type"] = "primal-dual"
+# prob.driver.opt_settings["mumps_mem_percent"] = 0
+# prob.driver.opt_settings["linear_solver"] = "pardiso"
+# prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
 
 prob.setup(mode="rev")
 
-prob.set_val("density_dv", 0.5**(1/3))  # initialize density to 0.5
+# prob.set_val("density_dv", 0.5**(1/3))  # initialize density to 0.5
 
 mesh_x, mesh_y = fem.get_mesh()
 
