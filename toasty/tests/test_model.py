@@ -29,7 +29,7 @@ class AssembledProblem(unittest.TestCase):
 
         self.p = prob = om.Problem()
         prob.model.add_subsystem(
-            "simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes_inputs=["density_dv"], promotes_outputs=["density"]
+            "simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes_inputs=[("density", "density_dv")], promotes_outputs=["density_penalized"]
         )
         prob.model.add_subsystem(
             "calc_mass", Mass(num_x=nx, num_y=ny), promotes_inputs=[("density", "density_dv")], promotes_outputs=["mass"]
@@ -37,7 +37,7 @@ class AssembledProblem(unittest.TestCase):
         prob.model.add_subsystem(
             "fem",
             FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q),
-            promotes_inputs=["density"],
+            promotes_inputs=[("density", "density_penalized")],
             promotes_outputs=["temp"],
         )
         prob.model.add_subsystem(

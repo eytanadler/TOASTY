@@ -60,10 +60,10 @@ class TestPenalizeDensity(unittest.TestCase):
         p.model = PenalizeDensity(num_x=nx, num_y=ny)
         p.setup()
 
-        p.set_val("density_dv", np.ones(((nx - 1) * (ny - 1))))
+        p.set_val("density", np.ones(((nx - 1) * (ny - 1))))
         p.run_model()
 
-        np.testing.assert_allclose(np.ones(((nx - 1) * (ny - 1))), p.get_val("density"))
+        np.testing.assert_allclose(np.ones(((nx - 1) * (ny - 1))), p.get_val("density_penalized"))
 
     def test_simple(self):
         nx = ny = 4
@@ -74,10 +74,10 @@ class TestPenalizeDensity(unittest.TestCase):
         p.model = PenalizeDensity(num_x=nx, num_y=ny)
         p.setup()
 
-        p.set_val("density_dv", rho)
+        p.set_val("density", rho)
         p.run_model()
 
-        np.testing.assert_allclose(rho**3, p.get_val("density"))
+        np.testing.assert_allclose(rho**3, p.get_val("density_penalized"))
 
     def test_partials(self):
         nx = ny = 4
@@ -88,7 +88,7 @@ class TestPenalizeDensity(unittest.TestCase):
         p.model.add_subsystem("penalize_rho", PenalizeDensity(num_x=nx, num_y=ny), promotes=["*"])
         p.setup()
 
-        p.set_val("density_dv", rho)
+        p.set_val("density", rho)
 
         om_assert.assert_check_partials(p.check_partials(), atol=5e-6, rtol=5e-6)
 
