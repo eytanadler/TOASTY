@@ -12,8 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 plt.ioff()
 
-cur_dir = os.path.dirname(__file__)
-
+cur_dir = os.path.abspath(os.path.dirname(__file__))
 
 def callback_plot(x, fname=None):
     # Only save a plot every X major iterations
@@ -45,6 +44,7 @@ def callback_plot(x, fname=None):
 # USER INPUTS
 out_folder = os.path.join(cur_dir, "opt")
 
+use_snopt = True
 min_compliance_problem = False
 mass_frac = 0.1
 
@@ -52,7 +52,7 @@ mass_frac = 0.1
 # mass_density_in = "density_dv" if min_compliance_problem else "density"
 mass_density_in = "density_dv"
 
-d = 1001
+d = 151
 nx = d
 ny = d
 n_elem = (nx - 1) * (ny - 1)
@@ -76,7 +76,7 @@ prob.model.add_subsystem(
 )
 fem = prob.model.add_subsystem(
     "fem",
-    FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q),
+    FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q, plot=None if use_snopt else [out_folder, 5]),
     promotes_inputs=["density"],
     promotes_outputs=["temp"],
 )
@@ -94,41 +94,42 @@ if min_compliance_problem:
 else:
     prob.model.add_objective("mass")
     prob.model.add_design_var("density_dv", lower=1e-2, upper=1.0)
-    prob.model.add_constraint("max_temp", upper=400)
+    prob.model.add_constraint("max_temp", upper=500)
 
 os.makedirs(out_folder, exist_ok=True)
 
-prob.driver = om.pyOptSparseDriver(optimizer="SNOPT")
-prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
-prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
-prob.driver.opt_settings["Iterations limit"] = 1e9
-prob.driver.opt_settings["Minor iterations limit"] = 50_000
-prob.driver.opt_settings["New superbasics limit"] = 5_000
-prob.driver.opt_settings["Major iterations limit"] = 5_000
-prob.driver.opt_settings["Violation limit"] = 1e4
-prob.driver.opt_settings["Major optimality tolerance"] = 1e-5
-prob.driver.opt_settings["Major feasibility tolerance"] = 1e-7
-prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
-prob.driver.opt_settings["Summary file"] = os.path.join(out_folder, "SNOPT_summary.out")
-prob.driver.opt_settings["snSTOP function handle"] = callback_plot
-prob.driver.opt_settings["Hessian updates"] = 500
-prob.driver.opt_settings["Verify level"] = 0
-
-# prob.driver = om.pyOptSparseDriver(optimizer="IPOPT")
-# prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
-# prob.driver.opt_settings["max_iter"] = 1000
-# prob.driver.opt_settings["constr_viol_tol"] = 1e-6
-# prob.driver.opt_settings["nlp_scaling_method"] = "gradient-based"
-# prob.driver.opt_settings["acceptable_tol"] = 1e-5
-# prob.driver.opt_settings["acceptable_iter"] = 0
-# prob.driver.opt_settings["tol"] = 1e-5
-# prob.driver.opt_settings["mu_strategy"] = "adaptive"
-# prob.driver.opt_settings["corrector_type"] = "affine"
-# prob.driver.opt_settings["limited_memory_max_history"] = 100
-# prob.driver.opt_settings["corrector_type"] = "primal-dual"
-# prob.driver.opt_settings["mumps_mem_percent"] = 0
-# prob.driver.opt_settings["linear_solver"] = "pardiso"
-# prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
+if use_snopt:
+    prob.driver = om.pyOptSparseDriver(optimizer="SNOPT")
+    prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
+    prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
+    prob.driver.opt_settings["Iterations limit"] = 1e9
+    prob.driver.opt_settings["Minor iterations limit"] = 30_000
+    prob.driver.opt_settings["New superbasics limit"] = 5_000
+    prob.driver.opt_settings["Major iterations limit"] = 5_000
+    prob.driver.opt_settings["Violation limit"] = 1e4
+    prob.driver.opt_settings["Major optimality tolerance"] = 1e-6
+    prob.driver.opt_settings["Major feasibility tolerance"] = 1e-8
+    prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
+    prob.driver.opt_settings["Summary file"] = os.path.join(out_folder, "SNOPT_summary.out")
+    prob.driver.opt_settings["snSTOP function handle"] = callback_plot
+    prob.driver.opt_settings["Hessian updates"] = 25
+    prob.driver.opt_settings["Verify level"] = 0
+    prob.driver.opt_settings["Penalty"] = 1
+else:
+    prob.driver = om.pyOptSparseDriver(optimizer="IPOPT")
+    prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
+    prob.driver.opt_settings["max_iter"] = 1000
+    prob.driver.opt_settings["constr_viol_tol"] = 1e-6
+    prob.driver.opt_settings["nlp_scaling_method"] = "gradient-based"
+    prob.driver.opt_settings["acceptable_tol"] = 1e-5
+    prob.driver.opt_settings["acceptable_iter"] = 0
+    prob.driver.opt_settings["tol"] = 1e-5
+    prob.driver.opt_settings["mu_strategy"] = "adaptive"
+    prob.driver.opt_settings["corrector_type"] = "affine"
+    prob.driver.opt_settings["limited_memory_max_history"] = 100
+    prob.driver.opt_settings["corrector_type"] = "primal-dual"
+    prob.driver.opt_settings["mumps_mem_percent"] = 100
+    prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
 
 prob.setup(mode="rev")
 
@@ -138,14 +139,6 @@ mesh_x, mesh_y = fem.get_mesh()
 
 # om.n2(prob, show_browser=True, outfile=os.path.join(out_folder, "opt_n2.html"))
 
-# print("Running model")
-# prob.run_model()
-# print("Computing totals")
-# from time import time
-# t_before = time()
-# prob.check_totals(["max_temp", "mass"], "density_dv")
-# print(f"Derivatives took {time() - t_before} sec")
-# prob.check_partials()
 prob.run_driver()
 
 callback_plot(

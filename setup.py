@@ -27,6 +27,7 @@ setup(
         "numpy>=1.16",
         "scipy",
         "openmdao>=3.16",
+        "matplotlib",
     ],
     extras_require={
         "test": ["pytest"],
