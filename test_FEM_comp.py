@@ -2,7 +2,7 @@ import openmdao.api as om
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-from toasty import FEM, Mass, PenalizeDensity
+from toasty import FEM, Mass, PenalizeDensity, LinearDensityFilter
 import subprocess
 
 # Do this to have the plotting work with nohup
@@ -20,8 +20,8 @@ def callback_plot(x, fname=None):
 
     print("plotting")
 
-    T = prob.get_val("temp").reshape(nx, ny)
-    density = prob.get_val("density").reshape(nx - 1, ny - 1)
+    T = prob.get_val("fem.temp").reshape(nx, ny)
+    density = prob.get_val("filter.density").reshape(nx - 1, ny - 1)
 
     fig, axs = plt.subplots(2, 1, figsize=(5, 8))
     c = axs[0].contourf(mesh_x, mesh_y, T, 100, cmap="coolwarm")
@@ -41,9 +41,9 @@ def callback_plot(x, fname=None):
     plt.close(fig)
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "opt")
+out_folder = os.path.join(cur_dir, "opt_filter")
 
-use_snopt = False
+use_snopt = True
 min_compliance_problem = False
 mass_frac = 0.1
 
@@ -51,7 +51,7 @@ mass_frac = 0.1
 # mass_density_in = "density_dv" if min_compliance_problem else "density"
 mass_density_in = "density_dv"
 
-d = 255
+d = 101
 nx = d
 ny = d
 n_elem = (nx - 1) * (ny - 1)
@@ -67,24 +67,22 @@ q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
 q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
 
 prob = om.Problem()
-prob.model.add_subsystem(
-    "simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes_inputs=["density_dv"], promotes_outputs=["density"]
-)
-prob.model.add_subsystem(
-    "calc_mass", Mass(num_x=nx, num_y=ny), promotes_inputs=[("density", mass_density_in)], promotes_outputs=["mass"]
-)
+filt = prob.model.add_subsystem("filter", LinearDensityFilter(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, r=1e-2), promotes_inputs=[("density", "density_dv")])
+prob.model.add_subsystem("penalize", PenalizeDensity(num_x=nx, num_y=ny, p=3.0))
+prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes_outputs=["mass"])
 fem = prob.model.add_subsystem(
     "fem",
     FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q, plot=None if use_snopt else [out_folder, 5]),
-    promotes_inputs=["density"],
-    promotes_outputs=["temp"],
 )
 prob.model.add_subsystem(
     "calc_max_temp",
     om.KSComp(width=nx * ny, rho=10.0),
-    promotes_inputs=[("g", "temp")],
     promotes_outputs=[("KS", "max_temp")],
 )
+
+prob.model.connect("filter.density_filtered", ["penalize.density", "calc_mass.density"])
+prob.model.connect("penalize.density_penalized", "fem.density")
+prob.model.connect("fem.temp", "calc_max_temp.g")
 
 if min_compliance_problem:
     prob.model.add_objective("max_temp")
@@ -111,7 +109,7 @@ if use_snopt:
     prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
     prob.driver.opt_settings["Summary file"] = os.path.join(out_folder, "SNOPT_summary.out")
     prob.driver.opt_settings["snSTOP function handle"] = callback_plot
-    prob.driver.opt_settings["Hessian updates"] = 25
+    prob.driver.opt_settings["Hessian updates"] = 50
     prob.driver.opt_settings["Verify level"] = 0
     prob.driver.opt_settings["Penalty"] = 1
 else:
@@ -137,14 +135,14 @@ prob.setup(mode="rev")
 
 mesh_x, mesh_y = fem.get_mesh()
 
+# plt.spy(filt.weight_mtx)
+# plt.show()
+
 # om.n2(prob, show_browser=True, outfile=os.path.join(out_folder, "opt_n2.html"))
 
 prob.run_driver()
 
-callback_plot(
-    {"funcs": {"fem.temp": prob.get_val("temp")}, "xuser": {"density": prob.get_val("density")}, "nMajor": 0},
-    fname=os.path.join(out_folder, f"opt_final.pdf"),
-)
+callback_plot({"nMajor": 0}, fname=os.path.join(out_folder, f"opt_final.pdf"))
 
 # Create video
 subprocess.run(

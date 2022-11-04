@@ -5,6 +5,7 @@ from .utils import gen_mesh
 from collections.abc import Iterable
 from time import time
 import matplotlib.pyplot as plt
+import matplotlib
 import os
 
 try:
@@ -63,6 +64,9 @@ class FEM(om.ImplicitComponent):
         self.options.declare("plot", default=None, desc="List with the output folder and frequency at which to plot")
 
     def setup(self):
+        from time import time
+        t_start = time()
+        print("Setting up FEM...", end="")
         self.nx = nx = self.options["num_x"]
         self.ny = ny = self.options["num_y"]
         self.mesh_x, self.mesh_y = gen_mesh(nx, ny, self.options["x_lim"], self.options["y_lim"])
@@ -95,7 +99,9 @@ class FEM(om.ImplicitComponent):
 
         # Set force vector to zero until user specifies nonzero heats
         self.F_glob = np.zeros((nx * ny, 1), dtype=float)
-        self._update_global_force()
+        self._update_global_force()  # TODO: make this faster
+
+        print(f"done in {time() - t_start} sec")
 
         self.plot_counter = 0
         self.plot_result = False
@@ -103,6 +109,7 @@ class FEM(om.ImplicitComponent):
             self.plot_result = True
             self.plot_dir = self.options["plot"][0]
             self.plot_freq = self.options["plot"][1]
+            self.cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#ffffffff", "#ffffff00"])
 
     def apply_nonlinear(self, inputs, outputs, residuals):
         print("apply_nonlinear...", end="")
@@ -129,6 +136,7 @@ class FEM(om.ImplicitComponent):
 
             fig, axs = plt.subplots(2, 1, figsize=(5, 8))
             c = axs[0].contourf(self.mesh_x, self.mesh_y, T, 100, cmap="coolwarm")
+            axs[0].pcolorfast(self.mesh_x, self.mesh_y, density, cmap=self.cmap, vmin=0.0, vmax=1.0, zorder=10)
             cbar = fig.colorbar(c, ax=axs[0])
             cbar.set_label("Temperature (K?)")
             axs[0].set_aspect("equal")
@@ -351,8 +359,6 @@ class FEM(om.ImplicitComponent):
             # those are not multiplied by density. The indices we've zeroed out will be removed in a sec, hold your horses.
             self.idx_density_map[i_corner] = np.delete(self.idx_density_map[i_corner], np.ix_(T_set_diag)[0])
             self.idx_val_map[i_corner] = np.delete(self.idx_val_map[i_corner], np.ix_(T_set_diag)[0])
-
-        # TODO: maybe give a shot at removing zero-valued spots in the matrix?
 
         # Flatten the values
         self.K_rows = np.array(self.K_rows).flatten()
