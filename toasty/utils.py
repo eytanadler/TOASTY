@@ -212,6 +212,55 @@ class PenalizeDensity(om.ExplicitComponent):
         jacobian["density_penalized", "density"] = self.options["p"] * inputs["density"] ** (self.options["p"] - 1)
 
 
+class SmoothStep(om.ExplicitComponent):
+    """
+    Smooth step function to guide values closer to 0 or 1.
+    """
+    def initialize(self):
+        self.options.declare("num_x", types=int, desc="Number of mesh coordinates in the x direction")
+        self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
+        self.options.declare("n", types=int, default=3, desc="Polynomial order of the smoothstep")
+        self.options.declare("x_min", types=float, default=0.25, desc="Step start x value")
+        self.options.declare("x_max", types=float, default=0.75, desc="Step end x value")
+        self.options.declare("y_min", types=float, default=1e-3, desc="Step minimum value")
+        self.options.declare("y_max", types=float, default=1.0, desc="Step maximum value")
+
+    def setup(self):
+        nx, ny = (self.options["num_x"], self.options["num_y"])
+        self.size = (nx - 1) * (ny - 1)
+        self.add_input("in", shape=(self.size,))
+        self.add_output("out", shape=(self.size,))
+
+        self.inds = np.arange(self.size).tolist()
+        self.declare_partials("out", "in", rows=self.inds, cols=self.inds)
+
+    def compute(self, inputs, outputs):
+        # Normalize the x values to the range [0, 1] and compute rational polynomial value
+        x_scaled = (inputs["in"] - self.options["x_min"]) / (self.options["x_max"] - self.options["x_min"])
+        y_scaled = x_scaled**self.options["n"] / (x_scaled**self.options["n"] + (1 - x_scaled) ** self.options["n"])
+
+        # Clip the values outside the step range
+        y_scaled = np.where(x_scaled < 0.0, 0.0, y_scaled)
+        y_scaled = np.where(x_scaled > 1.0, 1.0, y_scaled)
+
+        # Convert back to the desired range
+        outputs["out"] = self.options["y_min"] + (self.options["y_max"] - self.options["y_min"]) * y_scaled
+
+    def compute_partials(self, inputs, partials):
+        # Normalize the x values to the range [0, 1] and compute rational polynomial derivative
+        x_scaled = (inputs["in"] - self.options["x_min"]) / (self.options["x_max"] - self.options["x_min"])
+        dYdX_scaled = self.options["n"] * x_scaled ** (self.options["n"] - 1) * (1.0 - x_scaled) ** (self.options["n"] - 1) / (x_scaled**self.options["n"] + (1.0 - x_scaled) ** self.options["n"]) ** 2
+
+        # Clip the values outside the step range
+        dYdX_scaled = np.where(x_scaled < 0.0, 0.0, dYdX_scaled)
+        dYdX_scaled = np.where(x_scaled > 1.0, 0.0, dYdX_scaled)
+
+        # Scale the derivatives back to the user's scale
+        dYdX = dYdX_scaled * (self.options["y_max"] - self.options["y_min"]) / (self.options["x_max"] - self.options["x_min"])
+
+        partials["out", "in"] = dYdX.flatten()
+
+
 class AvgTemp(om.ExplicitComponent):
     """
     Compute the average temperature in each element weighted by the element's density.
