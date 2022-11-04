@@ -2,7 +2,6 @@ import openmdao.api as om
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-from toasty.FEM_comp_dense import FEM as FEM_dense
 from toasty import FEM, Mass, PenalizeDensity
 import subprocess
 
@@ -44,7 +43,7 @@ def callback_plot(x, fname=None):
 # USER INPUTS
 out_folder = os.path.join(cur_dir, "opt")
 
-use_snopt = True
+use_snopt = False
 min_compliance_problem = False
 mass_frac = 0.1
 
@@ -52,7 +51,7 @@ mass_frac = 0.1
 # mass_density_in = "density_dv" if min_compliance_problem else "density"
 mass_density_in = "density_dv"
 
-d = 151
+d = 255
 nx = d
 ny = d
 n_elem = (nx - 1) * (ny - 1)
@@ -118,7 +117,8 @@ if use_snopt:
 else:
     prob.driver = om.pyOptSparseDriver(optimizer="IPOPT")
     prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
-    prob.driver.opt_settings["max_iter"] = 1000
+    prob.driver.opt_settings["output_file"] = os.path.join(out_folder, "IPOPT.out")
+    prob.driver.opt_settings["max_iter"] = 5000
     prob.driver.opt_settings["constr_viol_tol"] = 1e-6
     prob.driver.opt_settings["nlp_scaling_method"] = "gradient-based"
     prob.driver.opt_settings["acceptable_tol"] = 1e-5
@@ -128,7 +128,7 @@ else:
     prob.driver.opt_settings["corrector_type"] = "affine"
     prob.driver.opt_settings["limited_memory_max_history"] = 100
     prob.driver.opt_settings["corrector_type"] = "primal-dual"
-    prob.driver.opt_settings["mumps_mem_percent"] = 100
+    # prob.driver.opt_settings["mumps_mem_percent"] = 0
     prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
 
 prob.setup(mode="rev")
