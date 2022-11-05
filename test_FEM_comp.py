@@ -43,7 +43,7 @@ def callback_plot(x, fname=None):
 # USER INPUTS
 out_folder = os.path.join(cur_dir, "opt_filter")
 
-use_snopt = True
+use_snopt = False
 min_compliance_problem = False
 mass_frac = 0.1
 
@@ -126,7 +126,6 @@ else:
     prob.driver.opt_settings["corrector_type"] = "affine"
     prob.driver.opt_settings["limited_memory_max_history"] = 100
     prob.driver.opt_settings["corrector_type"] = "primal-dual"
-    # prob.driver.opt_settings["mumps_mem_percent"] = 0
     prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
 
 prob.setup(mode="rev")

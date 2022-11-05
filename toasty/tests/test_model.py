@@ -4,6 +4,7 @@ import numpy as np
 from toasty import PenalizeDensity, Mass, FEM
 import unittest
 
+
 class AssembledProblem(unittest.TestCase):
     def setUp(self):
         self.rand = np.random.default_rng(153)
@@ -29,10 +30,16 @@ class AssembledProblem(unittest.TestCase):
 
         self.p = prob = om.Problem()
         prob.model.add_subsystem(
-            "simp", PenalizeDensity(num_x=nx, num_y=ny, p=3.0), promotes_inputs=[("density", "density_dv")], promotes_outputs=["density_penalized"]
+            "simp",
+            PenalizeDensity(num_x=nx, num_y=ny, p=3.0),
+            promotes_inputs=[("density", "density_dv")],
+            promotes_outputs=["density_penalized"],
         )
         prob.model.add_subsystem(
-            "calc_mass", Mass(num_x=nx, num_y=ny), promotes_inputs=[("density", "density_dv")], promotes_outputs=["mass"]
+            "calc_mass",
+            Mass(num_x=nx, num_y=ny),
+            promotes_inputs=[("density", "density_dv")],
+            promotes_outputs=["mass"],
         )
         prob.model.add_subsystem(
             "fem",
@@ -72,5 +79,6 @@ class AssembledProblem(unittest.TestCase):
 
         om_assert.assert_check_totals(self.p.check_totals(["mass", "max_temp"], "density_dv"), atol=6e-2, rtol=1e-5)
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     unittest.main()

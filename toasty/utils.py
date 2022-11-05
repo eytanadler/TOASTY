@@ -63,7 +63,7 @@ class LinearDensityFilter(om.ExplicitComponent):
     density : float
         Densities of each element. The shape corresponds to the flattened
         2D array of elements.
-    
+
     Outputs
     -------
     density_filtered : float
@@ -95,6 +95,7 @@ class LinearDensityFilter(om.ExplicitComponent):
 
     def setup(self):
         from time import time
+
         t_start = time()
         print("Setting up LinearDensityFilter...", end="")
         nx, ny = (self.options["num_x"], self.options["num_y"])
@@ -141,7 +142,7 @@ class LinearDensityFilter(om.ExplicitComponent):
                 xj, yj = ((idx_x_neighbor + 0.5) * x_spacing, (idx_y_neighbor + 0.5) * y_spacing)
 
                 # Weight of element j on element i
-                wj = 1 - ((xj - xi)**2 + (yj - yi)**2) / r**2
+                wj = 1 - ((xj - xi) ** 2 + (yj - yi) ** 2) / r**2
                 idx_nonzero = wj > 0.0
 
                 # Get rid of the nonzero elements
@@ -163,6 +164,7 @@ class LinearDensityFilter(om.ExplicitComponent):
 
     def compute(self, inputs, outputs):
         outputs["density_filtered"] = self.weight_mtx @ inputs["density"]
+
 
 class PenalizeDensity(om.ExplicitComponent):
     """
@@ -216,6 +218,7 @@ class SmoothStep(om.ExplicitComponent):
     """
     Smooth step function to guide values closer to 0 or 1.
     """
+
     def initialize(self):
         self.options.declare("num_x", types=int, desc="Number of mesh coordinates in the x direction")
         self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
@@ -237,7 +240,7 @@ class SmoothStep(om.ExplicitComponent):
     def compute(self, inputs, outputs):
         # Normalize the x values to the range [0, 1] and compute rational polynomial value
         x_scaled = (inputs["in"] - self.options["x_min"]) / (self.options["x_max"] - self.options["x_min"])
-        y_scaled = x_scaled**self.options["n"] / (x_scaled**self.options["n"] + (1 - x_scaled) ** self.options["n"])
+        y_scaled = x_scaled ** self.options["n"] / (x_scaled ** self.options["n"] + (1 - x_scaled) ** self.options["n"])
 
         # Clip the values outside the step range
         y_scaled = np.where(x_scaled < 0.0, 0.0, y_scaled)
@@ -249,14 +252,23 @@ class SmoothStep(om.ExplicitComponent):
     def compute_partials(self, inputs, partials):
         # Normalize the x values to the range [0, 1] and compute rational polynomial derivative
         x_scaled = (inputs["in"] - self.options["x_min"]) / (self.options["x_max"] - self.options["x_min"])
-        dYdX_scaled = self.options["n"] * x_scaled ** (self.options["n"] - 1) * (1.0 - x_scaled) ** (self.options["n"] - 1) / (x_scaled**self.options["n"] + (1.0 - x_scaled) ** self.options["n"]) ** 2
+        dYdX_scaled = (
+            self.options["n"]
+            * x_scaled ** (self.options["n"] - 1)
+            * (1.0 - x_scaled) ** (self.options["n"] - 1)
+            / (x_scaled ** self.options["n"] + (1.0 - x_scaled) ** self.options["n"]) ** 2
+        )
 
         # Clip the values outside the step range
         dYdX_scaled = np.where(x_scaled < 0.0, 0.0, dYdX_scaled)
         dYdX_scaled = np.where(x_scaled > 1.0, 0.0, dYdX_scaled)
 
         # Scale the derivatives back to the user's scale
-        dYdX = dYdX_scaled * (self.options["y_max"] - self.options["y_min"]) / (self.options["x_max"] - self.options["x_min"])
+        dYdX = (
+            dYdX_scaled
+            * (self.options["y_max"] - self.options["y_min"])
+            / (self.options["x_max"] - self.options["x_min"])
+        )
 
         partials["out", "in"] = dYdX.flatten()
 

@@ -65,6 +65,7 @@ class FEM(om.ImplicitComponent):
 
     def setup(self):
         from time import time
+
         t_start = time()
         print("Setting up FEM...", end="")
         self.nx = nx = self.options["num_x"]
@@ -98,8 +99,8 @@ class FEM(om.ImplicitComponent):
         self._preprocess_pRpx()
 
         # Set force vector to zero until user specifies nonzero heats
-        self.F_glob = np.zeros((nx * ny, 1), dtype=float)
-        self._update_global_force()  # TODO: make this faster
+        self.F_glob = np.zeros((nx * ny,), dtype=float)
+        self._update_global_force()
 
         print(f"done in {time() - t_start} sec")
 
@@ -233,35 +234,32 @@ class FEM(om.ImplicitComponent):
     def _update_global_force(self):
         """
         Set up the global force vector and store it in self.F_glob (overwrites).
-        This is a pretty lazy way of doing it, but it only happens once at the beginning,
-        so it's not a big deal.
         """
         self.F_glob *= 0  # reset global stiffness matrix
 
         # Loop over each element and put its local stiffness matrix in the global one
-        for i in range(self.nx - 1):
-            for j in range(self.ny - 1):
-                # 2D indices in the mesh of the nodes surrounding the current element
-                idx = np.array(
-                    [
-                        [i, j],
-                        [i + 1, j],
-                        [i + 1, j + 1],
-                        [i, j + 1],
-                    ]
-                )
+        nonzero_q_idx = np.argwhere(self.options["q"] != 0)
+        for i, j in nonzero_q_idx:
+            # 2D indices in the mesh of the nodes surrounding the current element
+            idx = np.array(
+                [
+                    [i, j],
+                    [i + 1, j],
+                    [i + 1, j + 1],
+                    [i, j + 1],
+                ]
+            )
 
-                # Convert the 2D indices to flattened 1D to determine where in the
-                # unknown vector (and global stiffness matrix) they'd be
-                idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
+            # Convert the 2D indices to flattened 1D to determine where in the
+            # unknown vector (and global stiffness matrix) they'd be
+            idx_glob = self._flattened_node_ij(idx[:, 0], idx[:, 1])
 
-                self.F_glob[idx_glob] += self._local_force(i, j, self.options["q"][i, j])
+            self.F_glob[idx_glob] += self._local_force(i, j, self.options["q"][i, j])
 
         # Any temperatures that are specified get the specified temperature in the force vector
-        for i in range(self.nx):
-            for j in range(self.ny):
-                if np.isfinite(self.options["T_set"][i, j]):
-                    self.F_glob[self._flattened_node_ij(i, j)] = self.options["T_set"][i, j]
+        finite_T_set_idx = np.argwhere(np.isfinite(self.options["T_set"]))
+        for i, j in finite_T_set_idx:
+            self.F_glob[self._flattened_node_ij(i, j)] = self.options["T_set"][i, j]
 
     def _preprocess_global_stiffness(self):
         """
@@ -513,13 +511,13 @@ class FEM(om.ImplicitComponent):
             ]
         )
 
-        force = np.zeros((4, 1), dtype=float)
+        force = np.zeros((4,), dtype=float)
 
         for N, dN in zip(self.N, self.dN_dxi):
             # Compute the Jacobian matrix
             J = dN @ nodal_coord
 
-            force += q * N.T * np.linalg.det(J)
+            force += q * N * np.linalg.det(J)
 
         return force
 
@@ -538,9 +536,7 @@ class FEM(om.ImplicitComponent):
         [N1, N2, N3, N4]
         """
         return (
-            1
-            / 4
-            * np.array([[(xi - 1) * (eta - 1), -(xi + 1) * (eta - 1), (xi + 1) * (eta + 1), -(xi - 1) * (eta + 1)]])
+            1 / 4 * np.array([(xi - 1) * (eta - 1), -(xi + 1) * (eta - 1), (xi + 1) * (eta + 1), -(xi - 1) * (eta + 1)])
         )
 
     @staticmethod
