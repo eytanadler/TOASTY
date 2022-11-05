@@ -12,6 +12,8 @@ matplotlib.use("Agg")
 plt.ioff()
 
 cur_dir = os.path.abspath(os.path.dirname(__file__))
+cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#ffffffff", "#ffffff00"])
+
 
 def callback_plot(x, fname=None):
     # Only save a plot every X major iterations
@@ -25,6 +27,7 @@ def callback_plot(x, fname=None):
 
     fig, axs = plt.subplots(2, 1, figsize=(5, 8))
     c = axs[0].contourf(mesh_x, mesh_y, T, 100, cmap="coolwarm")
+    axs[0].pcolorfast(mesh_x, mesh_y, density, cmap=cmap, vmin=0.0, vmax=1.0, zorder=10)
     cbar = fig.colorbar(c, ax=axs[0])
     cbar.set_label("Temperature (K?)")
     axs[0].set_aspect("equal")
@@ -40,8 +43,9 @@ def callback_plot(x, fname=None):
         fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
     plt.close(fig)
 
+
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "opt_filter")
+out_folder = os.path.join(cur_dir, "opt")
 
 use_snopt = False
 min_compliance_problem = False
@@ -67,7 +71,11 @@ q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
 q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
 
 prob = om.Problem()
-filt = prob.model.add_subsystem("filter", LinearDensityFilter(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, r=1e-2), promotes_inputs=[("density", "density_dv")])
+prob.model.add_subsystem(
+    "filter",
+    LinearDensityFilter(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, r=1e-2),
+    promotes_inputs=[("density", "density_dv")],
+)
 prob.model.add_subsystem("penalize", PenalizeDensity(num_x=nx, num_y=ny, p=3.0))
 prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes_outputs=["mass"])
 fem = prob.model.add_subsystem(
@@ -133,9 +141,6 @@ prob.setup(mode="rev")
 # prob.set_val("density_dv", 0.5**(1/3))  # initialize density to 0.5
 
 mesh_x, mesh_y = fem.get_mesh()
-
-# plt.spy(filt.weight_mtx)
-# plt.show()
 
 # om.n2(prob, show_browser=True, outfile=os.path.join(out_folder, "opt_n2.html"))
 

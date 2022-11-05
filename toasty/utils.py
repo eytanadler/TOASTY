@@ -2,6 +2,7 @@ import openmdao.api as om
 import numpy as np
 import scipy.sparse as sp
 from collections.abc import Iterable
+from time import time
 
 
 def gen_mesh(nx, ny, xlim, ylim):
@@ -94,10 +95,8 @@ class LinearDensityFilter(om.ExplicitComponent):
         self.options.declare("r", default=1e-2, types=float, desc="Penalty factor")
 
     def setup(self):
-        from time import time
-
         t_start = time()
-        print("Setting up LinearDensityFilter...", end="")
+        print("Setting up LinearDensityFilter...")
         nx, ny = (self.options["num_x"], self.options["num_y"])
         n_elem = (nx - 1) * (ny - 1)
         r = self.options["r"]
@@ -119,10 +118,18 @@ class LinearDensityFilter(om.ExplicitComponent):
         # TODO: make this faster
 
         # Loop over the densities to be weighted
+        slow_str = " sorry I'm slow :("
         for idx_x in range(nx - 1):
             for idx_y in range(ny - 1):
                 # Row in the filtering matrix, which corresponds to the density of element (idx_x, idx_y), which we call i
                 row_idx = idx_x * (ny - 1) + idx_y
+
+                if row_idx % 10000 == 5000:
+                    time_left = (n_elem - row_idx) / (row_idx + 1) * (time() - t_start)
+                    print(
+                        f"    I'll be done in {time_left:.0f} sec{slow_str if time_left > 10 else ''}                                 ",
+                        end="\r",
+                    )
 
                 # Centroid coordinates of the element whose density is being weighted
                 xi, yi = ((idx_x + 0.5) * x_spacing, (idx_y + 0.5) * y_spacing)
@@ -160,7 +167,7 @@ class LinearDensityFilter(om.ExplicitComponent):
 
         self.weight_mtx = sp.csr_matrix((np.hstack(vals), (np.hstack(rows), np.hstack(cols))), shape=(n_elem, n_elem))
         self.declare_partials("density_filtered", "density", val=self.weight_mtx)
-        print(f"done in {time() - t_start} sec")
+        print(f"    ...done in {time() - t_start} sec")
 
     def compute(self, inputs, outputs):
         outputs["density_filtered"] = self.weight_mtx @ inputs["density"]
