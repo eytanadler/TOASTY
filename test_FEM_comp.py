@@ -2,7 +2,7 @@ import openmdao.api as om
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-from toasty import FEM, Mass, PenalizeDensity, LinearDensityFilter
+from toasty import FEM, Mass, PenalizeDensity, LinearDensityFilter, load_airport
 import subprocess
 
 # Do this to have the plotting work with nohup
@@ -12,12 +12,15 @@ matplotlib.use("Agg")
 plt.ioff()
 
 cur_dir = os.path.abspath(os.path.dirname(__file__))
-cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#ffffffff", "#ffffff00"])
+cmap_white = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#ffffffff", "#ffffff00"])
+cmap_run = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#00000000", "#00000055"])
+cmap_taxi = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#b3b3b300", "#b3b3b3ff"])
+cmap_build = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#00000000", "#000000ff"])
 
 
 def callback_plot(x, fname=None):
     # Only save a plot every X major iterations
-    if x["nMajor"] % 5 != 0:
+    if x["nMajor"] % 1 != 0:
         return
 
     print("plotting")
@@ -25,17 +28,28 @@ def callback_plot(x, fname=None):
     T = prob.get_val("fem.temp").reshape(nx, ny)
     density = prob.get_val("filter.density").reshape(nx - 1, ny - 1)
 
-    fig, axs = plt.subplots(2, 1, figsize=(5, 8))
-    c = axs[0].contourf(mesh_x, mesh_y, T, 100, cmap="coolwarm")
-    axs[0].pcolorfast(mesh_x, mesh_y, density, cmap=cmap, vmin=0.0, vmax=1.0, zorder=10)
-    cbar = fig.colorbar(c, ax=axs[0])
-    cbar.set_label("Temperature (K?)")
-    axs[0].set_aspect("equal")
+    if airport is None:
+        fig, axs = plt.subplots(2, 1, figsize=(5, 8))
+        c = axs[0].contourf(mesh_x, mesh_y, T, 100, cmap="coolwarm")
+        axs[0].pcolorfast(mesh_x, mesh_y, density, cmap=cmap_white, vmin=0.0, vmax=1.0, zorder=10)
+        cbar = fig.colorbar(c, ax=axs[0])
+        cbar.set_label("Temperature (K?)")
+        axs[0].set_aspect("equal")
 
-    c = axs[1].pcolorfast(mesh_x, mesh_y, density, cmap="Blues", vmin=0.0, vmax=1.0)
-    cbar = fig.colorbar(c, ax=axs[1])
-    cbar.set_label("Density")
-    axs[1].set_aspect("equal")
+        c = axs[1].pcolorfast(mesh_x, mesh_y, density, cmap="Blues", vmin=0.0, vmax=1.0)
+        cbar = fig.colorbar(c, ax=axs[1])
+        cbar.set_label("Density")
+        axs[1].set_aspect("equal")
+    else:
+        fig, ax = plt.subplots(figsize=(xlim[1] * 10, ylim[1] * 10))
+        c = ax.contourf(mesh_x, mesh_y, T, 100, cmap="coolwarm", zorder=0)
+        ax.pcolorfast(mesh_x, mesh_y, density, cmap=cmap_white, vmin=0.0, vmax=1.0, zorder=1)
+        ax.pcolorfast(mesh_x, mesh_y, apt_data["runways"], cmap=cmap_run, vmin=0.0, vmax=1.0, zorder=2)
+        ax.pcolorfast(mesh_x, mesh_y, apt_data["buildings"], cmap=cmap_build, vmin=0.0, vmax=1.0, zorder=2)
+        cbar = fig.colorbar(c, ax=ax, fraction=0.02, pad=0.05)
+        cbar.set_label("Temperature (K?)")
+        ax.set_aspect("equal")
+        ax.set_axis_off()
 
     if fname:
         fig.savefig(fname)
@@ -45,30 +59,48 @@ def callback_plot(x, fname=None):
 
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "opt")
+out_folder = os.path.join(cur_dir, "SAN_airport_1500w")
 
-use_snopt = False
+use_snopt = True
 min_compliance_problem = False
 mass_frac = 0.1
+airport = "SAN"  # set to None to do other problem
+resolution = "300w"
 
 # Proper SIMP for min compliance problem (required to make linear mass constraint)
 # mass_density_in = "density_dv" if min_compliance_problem else "density"
 mass_density_in = "density_dv"
+min_density = 1e-3  # lower bound on density
 
-d = 101
-nx = d
-ny = d
-n_elem = (nx - 1) * (ny - 1)
-xlim = (0.0, 1.0)
-ylim = xlim
+if airport is None:
+    d = 101
+    nx = d
+    ny = d
+    n_elem = (nx - 1) * (ny - 1)
+    xlim = (0.0, 1.0)
+    ylim = xlim
 
-T_set = np.full((nx, ny), np.inf)
-T_set[[nx // 3, 2 * nx // 3], 0] = 200.0
+    T_set = np.full((nx, ny), np.inf)
+    T_set[[nx // 3, 2 * nx // 3], 0] = 200.0
 
-q = np.zeros((nx - 1, ny - 1), dtype=float)
-q[0, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
-q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
-q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
+    q = np.zeros((nx - 1, ny - 1), dtype=float)
+    q[0, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
+    q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
+    q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
+
+    density_lower = min_density
+else:
+    apt_data = load_airport(airport, resolution)
+    nx, ny, xlim, ylim = (apt_data["num_x"], apt_data["num_y"], apt_data["x_lim"], apt_data["y_lim"])
+    n_elem = (nx - 1) * (ny - 1)
+
+    T_set = 200.0 * apt_data["T_set_node"]["27"]
+    T_set[T_set == 0] = np.inf
+    q = 5e7 * apt_data["q_elem"]["27"]
+    q[np.arange(2 * nx // 3), :] *= 20
+
+    density_lower = apt_data["runways"].flatten()
+    density_lower[density_lower < min_density] = min_density
 
 prob = om.Problem()
 prob.model.add_subsystem(
@@ -80,7 +112,16 @@ prob.model.add_subsystem("penalize", PenalizeDensity(num_x=nx, num_y=ny, p=3.0))
 prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes_outputs=["mass"])
 fem = prob.model.add_subsystem(
     "fem",
-    FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q, plot=None if use_snopt else [out_folder, 5]),
+    FEM(
+        num_x=nx,
+        num_y=ny,
+        x_lim=xlim,
+        y_lim=ylim,
+        T_set=T_set,
+        q=q,
+        plot=None if use_snopt else [out_folder, 5],
+        airport_data=apt_data if airport else None,
+    ),
 )
 prob.model.add_subsystem(
     "calc_max_temp",
@@ -94,12 +135,12 @@ prob.model.connect("fem.temp", "calc_max_temp.g")
 
 if min_compliance_problem:
     prob.model.add_objective("max_temp")
-    prob.model.add_design_var("density_dv", lower=1e-2, upper=1.0)
+    prob.model.add_design_var("density_dv", lower=density_lower, upper=1.0)
     prob.model.add_constraint("mass", upper=mass_frac * n_elem, linear=True)
 else:
     prob.model.add_objective("mass")
-    prob.model.add_design_var("density_dv", lower=1e-2, upper=1.0)
-    prob.model.add_constraint("max_temp", upper=500)
+    prob.model.add_design_var("density_dv", lower=density_lower, upper=1.0)
+    prob.model.add_constraint("max_temp", upper=1000)
 
 os.makedirs(out_folder, exist_ok=True)
 
@@ -112,8 +153,8 @@ if use_snopt:
     prob.driver.opt_settings["New superbasics limit"] = 5_000
     prob.driver.opt_settings["Major iterations limit"] = 5_000
     prob.driver.opt_settings["Violation limit"] = 1e4
-    prob.driver.opt_settings["Major optimality tolerance"] = 1e-6
-    prob.driver.opt_settings["Major feasibility tolerance"] = 1e-8
+    prob.driver.opt_settings["Major optimality tolerance"] = 1e-5
+    prob.driver.opt_settings["Major feasibility tolerance"] = 1e-7
     prob.driver.opt_settings["Print file"] = os.path.join(out_folder, "SNOPT_print.out")
     prob.driver.opt_settings["Summary file"] = os.path.join(out_folder, "SNOPT_summary.out")
     prob.driver.opt_settings["snSTOP function handle"] = callback_plot

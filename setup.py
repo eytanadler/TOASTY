@@ -28,6 +28,7 @@ setup(
         "scipy",
         "openmdao>=3.16",
         "matplotlib",
+        "Pillow",
     ],
     extras_require={
         "test": ["pytest"],
