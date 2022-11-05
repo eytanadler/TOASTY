@@ -162,10 +162,10 @@ class FEM(om.ImplicitComponent):
                 c = ax.contourf(self.mesh_x, self.mesh_y, T, 100, cmap="coolwarm", zorder=0)
                 ax.pcolorfast(self.mesh_x, self.mesh_y, density, cmap=self.cmap_white, vmin=0.0, vmax=1.0, zorder=1)
                 ax.pcolorfast(
-                    self.mesh_x, self.mesh_y, apt_data["runways"], cmap=self.cmap_run, vmin=0.0, vmax=1.0, zorder=2
+                    self.mesh_x, self.mesh_y, apt_data["runways"], cmap=self.cmap_runway, vmin=0.0, vmax=1.0, zorder=2
                 )
                 ax.pcolorfast(
-                    self.mesh_x, self.mesh_y, apt_data["buildings"], cmap=self.cmap_build, vmin=0.0, vmax=1.0, zorder=2
+                    self.mesh_x, self.mesh_y, apt_data["buildings"], cmap=self.cmap_building, vmin=0.0, vmax=1.0, zorder=2
                 )
                 cbar = fig.colorbar(c, ax=ax, fraction=0.02, pad=0.05)
                 cbar.set_label("Temperature (K?)")
