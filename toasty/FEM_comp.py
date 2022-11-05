@@ -142,7 +142,7 @@ class FEM(om.ImplicitComponent):
             density = inputs["density"].reshape(self.nx - 1, self.ny - 1)
 
             if self.options["airport_data"] is None:
-                fig, axs = plt.subplots(2, 1, figsize=(8.5, 8))
+                fig, axs = plt.subplots(2, 1, figsize=(5, 8))
                 c = axs[0].contourf(self.mesh_x, self.mesh_y, T, 100, cmap="coolwarm")
                 axs[0].pcolorfast(
                     self.mesh_x, self.mesh_y, density, cmap=self.cmap_white, vmin=0.0, vmax=1.0, zorder=10

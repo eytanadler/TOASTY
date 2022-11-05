@@ -1,7 +1,7 @@
 import openmdao.api as om
 import openmdao.utils.assert_utils as om_assert
 import numpy as np
-from toasty import PenalizeDensity, Mass, FEM
+from toasty import SIMP
 import unittest
 
 
@@ -31,27 +31,8 @@ class AssembledProblem(unittest.TestCase):
         self.p = prob = om.Problem()
         prob.model.add_subsystem(
             "simp",
-            PenalizeDensity(num_x=nx, num_y=ny, p=3.0),
-            promotes_inputs=[("density", "density_dv")],
-            promotes_outputs=["density_penalized"],
-        )
-        prob.model.add_subsystem(
-            "calc_mass",
-            Mass(num_x=nx, num_y=ny),
-            promotes_inputs=[("density", "density_dv")],
-            promotes_outputs=["mass"],
-        )
-        prob.model.add_subsystem(
-            "fem",
-            FEM(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q),
-            promotes_inputs=[("density", "density_penalized")],
-            promotes_outputs=["temp"],
-        )
-        prob.model.add_subsystem(
-            "calc_max_temp",
-            om.KSComp(width=nx * ny, rho=50.0),
-            promotes_inputs=[("g", "temp")],
-            promotes_outputs=[("KS", "max_temp")],
+            SIMP(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, T_set=T_set, q=q, p=3.0, ks_rho=50.0),
+            promotes=["*"],
         )
 
         prob.setup()

@@ -92,7 +92,7 @@ class LinearDensityFilter(om.ExplicitComponent):
         self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
         self.options.declare("x_lim", default=(0.0, 1.0), types=Iterable, desc="Lower and upper bounds on x range")
         self.options.declare("y_lim", default=(0.0, 1.0), types=Iterable, desc="Lower and upper bounds on y range")
-        self.options.declare("r", default=1e-2, types=float, desc="Penalty factor")
+        self.options.declare("r", default=1e-2, types=float, desc="Filter radius")
 
     def setup(self):
         t_start = time()

@@ -2,7 +2,7 @@ import openmdao.api as om
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-from toasty import FEM, Mass, PenalizeDensity, LinearDensityFilter, load_airport
+from toasty import SIMP, load_airport
 import subprocess
 
 # Do this to have the plotting work with nohup
@@ -25,8 +25,8 @@ def callback_plot(x, fname=None):
 
     print("plotting")
 
-    T = prob.get_val("fem.temp").reshape(nx, ny)
-    density = prob.get_val("filter.density").reshape(nx - 1, ny - 1)
+    T = prob.get_val("temp").reshape(nx, ny)
+    density = prob.get_val("density").reshape(nx - 1, ny - 1)
 
     if airport is None:
         fig, axs = plt.subplots(2, 1, figsize=(5, 8))
@@ -59,9 +59,9 @@ def callback_plot(x, fname=None):
 
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "SAN_airport_1500w")
+out_folder = os.path.join(cur_dir, "SAN_airport_300w")
 
-use_snopt = True
+use_snopt = False
 min_compliance_problem = False
 mass_frac = 0.1
 airport = "SAN"  # set to None to do other problem
@@ -103,16 +103,9 @@ else:
     density_lower[density_lower < min_density] = min_density
 
 prob = om.Problem()
-prob.model.add_subsystem(
-    "filter",
-    LinearDensityFilter(num_x=nx, num_y=ny, x_lim=xlim, y_lim=ylim, r=1e-2),
-    promotes_inputs=[("density", "density_dv")],
-)
-prob.model.add_subsystem("penalize", PenalizeDensity(num_x=nx, num_y=ny, p=3.0))
-prob.model.add_subsystem("calc_mass", Mass(num_x=nx, num_y=ny), promotes_outputs=["mass"])
-fem = prob.model.add_subsystem(
-    "fem",
-    FEM(
+simp = prob.model.add_subsystem(
+    "simp",
+    SIMP(
         num_x=nx,
         num_y=ny,
         x_lim=xlim,
@@ -121,17 +114,13 @@ fem = prob.model.add_subsystem(
         q=q,
         plot=None if use_snopt else [out_folder, 5],
         airport_data=apt_data if airport else None,
+        r=1e-2,
+        p=3.0,
+        ks_rho=10.0,
+        use_smoothstep=False,
     ),
+    promotes=["*"],
 )
-prob.model.add_subsystem(
-    "calc_max_temp",
-    om.KSComp(width=nx * ny, rho=10.0),
-    promotes_outputs=[("KS", "max_temp")],
-)
-
-prob.model.connect("filter.density_filtered", ["penalize.density", "calc_mass.density"])
-prob.model.connect("penalize.density_penalized", "fem.density")
-prob.model.connect("fem.temp", "calc_max_temp.g")
 
 if min_compliance_problem:
     prob.model.add_objective("max_temp")
@@ -181,7 +170,7 @@ prob.setup(mode="rev")
 
 # prob.set_val("density_dv", 0.5**(1/3))  # initialize density to 0.5
 
-mesh_x, mesh_y = fem.get_mesh()
+mesh_x, mesh_y = simp.get_mesh()
 
 # om.n2(prob, show_browser=True, outfile=os.path.join(out_folder, "opt_n2.html"))
 
