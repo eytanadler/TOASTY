@@ -104,7 +104,7 @@ class FEM(om.ImplicitComponent):
 
         print(f"done in {time() - t_start} sec")
 
-        self.plot_counter = 0
+        self.plot_counter = -1
         self.plot_result = False
         if self.options["plot"] is not None:
             self.plot_result = True
