@@ -58,16 +58,16 @@ for f in allFlights:
 trail = fr_api.get_flight_details(someFlights[0].id)["trail"]
 latlong = np.zeros((len(trail), 2))
 for i, point in enumerate(trail):
-    latlong[i, 0:] = [point["lng"], point["lat"]]
+    latlong[i, :] = [point["lng"], point["lat"]]
 
 for i, point in enumerate(latlong):
     print(point)
 
     # do this part to associate the map with the data!
     x, y = tmb.project(*point)
-    ax.scatter(x, y, color="black")
+    ax.scatter(x, y, color="black", s=10)
     # if i > 10:
     #     break
 
-plt.savefig("path_on_san.png")
-# plt.show()
+# plt.savefig("path_on_san.png")
+plt.show()
