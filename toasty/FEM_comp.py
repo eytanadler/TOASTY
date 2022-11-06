@@ -114,6 +114,7 @@ class FEM(om.ImplicitComponent):
             self.plot_result = True
             self.plot_dir = self.options["plot"][0]
             self.plot_freq = self.options["plot"][1]
+            os.makedirs(self.plot_dir, exist_ok=True)
             self.cmap_white = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#ffffffff", "#ffffff00"])
             self.cmap_runway = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#00000000", "#00000055"])
             self.cmap_building = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#00000000", "#000000ff"])

@@ -25,22 +25,10 @@ def callback_plot(x, fname=None):
 
     print("plotting")
 
-    T = prob.get_val("temp").reshape(nx, ny)
-    density = prob.get_val("density").reshape(nx - 1, ny - 1)
+    for case in cases:
+        T = prob.get_val(f"temp_{case}").reshape(nx, ny)
+        density = prob.get_val("density").reshape(nx - 1, ny - 1)
 
-    if airport is None:
-        fig, axs = plt.subplots(2, 1, figsize=(5, 8))
-        c = axs[0].contourf(mesh_x, mesh_y, T, 100, cmap="coolwarm")
-        axs[0].pcolorfast(mesh_x, mesh_y, density, cmap=cmap_white, vmin=0.0, vmax=1.0, zorder=10)
-        cbar = fig.colorbar(c, ax=axs[0])
-        cbar.set_label("Temperature (K?)")
-        axs[0].set_aspect("equal")
-
-        c = axs[1].pcolorfast(mesh_x, mesh_y, density, cmap="Blues", vmin=0.0, vmax=1.0)
-        cbar = fig.colorbar(c, ax=axs[1])
-        cbar.set_label("Density")
-        axs[1].set_aspect("equal")
-    else:
         fig, ax = plt.subplots(figsize=(xlim[1] * 10, ylim[1] * 10))
         c = ax.contourf(mesh_x, mesh_y, T, 100, cmap="coolwarm", zorder=0)
         ax.pcolorfast(mesh_x, mesh_y, density, cmap=cmap_white, vmin=0.0, vmax=1.0, zorder=1)
@@ -51,52 +39,39 @@ def callback_plot(x, fname=None):
         ax.set_aspect("equal")
         ax.set_axis_off()
 
-    if fname:
-        fig.savefig(fname)
-    else:
-        fig.savefig(os.path.join(out_folder, f"opt_{x['nMajor']:04d}.png"), dpi=300)
-    plt.close(fig)
+        os.makedirs(os.path.join(out_folder, case), exist_ok=True)
+        if fname:
+            fig.savefig(fname)
+        else:
+            fig.savefig(os.path.join(out_folder, case, f"opt_{x['nMajor']:04d}.png"), dpi=300)
+        plt.close(fig)
 
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "DTW_500w")
-
+out_folder = os.path.join(cur_dir, "DTW_250w_multipoint")
 use_snopt = True
-min_compliance_problem = False
-mass_frac = 0.1
 airport = "DTW"  # set to None to do other problem
-resolution = "500w"
+resolution = "250w"
 min_density = 1e-3  # lower bound on density
 
-if airport is None:
-    d = 101
-    nx = d
-    ny = d
-    n_elem = (nx - 1) * (ny - 1)
-    xlim = (0.0, 1.0)
-    ylim = xlim
+apt_data = load_airport(airport, resolution)
 
-    T_set = np.full((nx, ny), np.inf)
-    T_set[[nx // 3, 2 * nx // 3], 0] = 200.0
+# Get rid of the case where all the terminals are sinks at once
+del apt_data["T_set_node"]["dumb"]
+del apt_data["q_elem"]["dumb"]
 
-    q = np.zeros((nx - 1, ny - 1), dtype=float)
-    q[0, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
-    q[nx // 2, -1] = 5e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
-    q[-1, -1] = 2e5 / ((xlim[1] - xlim[0]) / (nx - 1)) ** 1.5
+cases = apt_data["q_elem"].keys()
+nx, ny, xlim, ylim = (apt_data["num_x"], apt_data["num_y"], apt_data["x_lim"], apt_data["y_lim"])
+n_elem = (nx - 1) * (ny - 1)
 
-    density_lower = min_density
-else:
-    apt_data = load_airport(airport, resolution)
-    nx, ny, xlim, ylim = (apt_data["num_x"], apt_data["num_y"], apt_data["x_lim"], apt_data["y_lim"])
-    n_elem = (nx - 1) * (ny - 1)
+# Set up the temperatures and heat generation to the desired amounts
+for case_name in cases:
+    apt_data["T_set_node"][case_name] *= 200.0
+    apt_data["T_set_node"][case_name][apt_data["T_set_node"][case_name] == 0] = np.inf
+    apt_data["q_elem"][case_name] *= 1e7
 
-    T_set = 200.0 * apt_data["T_set_node"]["dumb"]
-    T_set[T_set == 0] = np.inf
-    q = 1e7 * apt_data["q_elem"]["dumb"]
-    # q[np.arange(2 * nx // 3), :] *= 20
-
-    density_lower = apt_data["runways"].flatten()
-    density_lower[density_lower < min_density] = min_density
+density_lower = apt_data["runways"].flatten()
+density_lower[density_lower < min_density] = min_density
 
 prob = om.Problem()
 simp = prob.model.add_subsystem(
@@ -106,10 +81,10 @@ simp = prob.model.add_subsystem(
         num_y=ny,
         x_lim=xlim,
         y_lim=ylim,
-        T_set=T_set,
-        q=q,
+        T_set=apt_data["T_set_node"],
+        q=apt_data["q_elem"],
         plot=None if use_snopt else [out_folder, 5],
-        airport_data=apt_data if airport else None,
+        airport_data=apt_data,
         r=4e-3,
         p=3.0,
         ks_rho=10.0,
@@ -118,14 +93,11 @@ simp = prob.model.add_subsystem(
     promotes=["*"],
 )
 
-if min_compliance_problem:
-    prob.model.add_objective("max_temp")
-    prob.model.add_design_var("density_dv", lower=density_lower, upper=1.0)
-    prob.model.add_constraint("mass", upper=mass_frac * n_elem, linear=True)
-else:
-    prob.model.add_objective("mass")
-    prob.model.add_design_var("density_dv", lower=density_lower, upper=1.0)
-    prob.model.add_constraint("max_temp", upper=650)
+prob.model.add_objective("mass")
+prob.model.add_design_var("density_dv", lower=density_lower, upper=1.0)
+prob.model.add_constraint("max_temp_evans", upper=900)
+prob.model.add_constraint("max_temp_macnamera", upper=600)
+prob.model.add_constraint("max_temp_macnamera_satellite", upper=800)
 
 os.makedirs(out_folder, exist_ok=True)
 
@@ -168,38 +140,24 @@ prob.setup(mode="rev")
 
 mesh_x, mesh_y = simp.get_mesh()
 
-# om.n2(prob, show_browser=True, outfile=os.path.join(out_folder, "opt_n2.html"))
-
+# prob.run_model()
 prob.run_driver()
 
-callback_plot({"nMajor": 0}, fname=os.path.join(out_folder, f"opt_final.pdf"))
-
 # Create video
-subprocess.run(
-    [
-        "ffmpeg",
-        "-framerate",
-        "24",
-        "-pattern_type",
-        "glob",
-        "-i",
-        os.path.join(out_folder, f"opt_*.png"),
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        os.path.join(out_folder, "opt_movie.mp4"),
-    ]
-)
-
-# # Smooth video
-# subprocess.run(
-#     [
-#         "ffmpeg",
-#         "-i",
-#         os.path.join(out_folder, "opt_move.mp4"),
-#         "-filter:v",
-#         "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
-#         os.path.join(out_folder, "opt_movie_smoothed.mp4"),
-#     ]
-# )
+for case_name in cases:
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-framerate",
+            "24",
+            "-pattern_type",
+            "glob",
+            "-i",
+            os.path.join(out_folder, case_name, f"opt_*.png"),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            os.path.join(out_folder, case_name, "opt_movie.mp4"),
+        ]
+    )
