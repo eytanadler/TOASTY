@@ -137,3 +137,7 @@ def plotAllInFolder(path, airport):
 # f = "../actualData/departures/WN2777_SAN_to_LAS"
 # file = openPickle(f)
 # plotMap(file, airport, True)
+
+# arrivalPath = join(dirname(__file__), "../actualData/arrivals")
+# airport = SanDiego()
+# plotAllInFolder(arrivalPath, airport)

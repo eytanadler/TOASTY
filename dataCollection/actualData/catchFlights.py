@@ -132,7 +132,7 @@ def catchDepartures(airport, openTime, refreshRate=120):
 
         for flight in allFlights:
 
-            # just look for new flights with our designated airport as the destination
+            # just look for new flights with our designated airport as the origin
             if flight.number not in flightNumbers and flight.origin_airport_iata == airport.code:
 
                 # check to see if the flight is in the air
@@ -155,5 +155,58 @@ def catchDepartures(airport, openTime, refreshRate=120):
         #     continue
 
 
+def catchArrivals(airport, openTime, refreshRate=60):
+    """
+    Catch flights that have arrived at <airport> over <openTime>
+    Checks again every <refreshRate>
+    Flights have to be on the ground at destination airport for arrival taxiing info to be present
+    Flights have to be caught before they switch to being classified as a departing flight, so refresh is lower than catchDepartures()
+
+    Parameters
+    ----------
+    airport : Airport class
+         airport being studied for this case
+    openTime : int
+        time to leave this running for
+    refreshRate : int, optional
+        rate at which to check for new flights, by default 60 (seconds)
+    """
+    startTime = time.time()
+    endTime = startTime + openTime
+
+    flightNumbers = []
+
+    first = True
+    # leave this running until we hit endTime
+    while time.time() < endTime:
+        print("checking")
+        # don't sleep the first time through
+        if not first:
+            print("sleep")
+            time.sleep(refreshRate)
+        first = False
+
+        # try:
+        allFlights = fr_api.get_flights(airport=airport.code)
+
+        for flight in allFlights:
+
+            # just look for new flights with our designated airport as the destination
+            if flight.number not in flightNumbers and flight.destination_airport_iata == airport.code:
+
+                # flight has to be on the ground
+                if flight.on_ground == 1:
+
+                    # flight has to be at detination airport
+                    if flightAtAirport(airport, flight):
+                        print(f"found flight {flight.number}")
+                        flightNumbers.append(flight.number)
+                        saveFlightInfo(flight, airport)
+
+        # except Exception:
+        #     continue
+
+
 airport = SanDiego()
-catchDepartures(airport, 3600)
+# catchDepartures(airport, 3600)
+catchArrivals(airport, 1000)
