@@ -1,5 +1,5 @@
 import numpy as np
-from dataCollection.Airport import Airport
+from dataCollection.airports.Airport import Airport
 
 class SanDiego(Airport):
     # basic info

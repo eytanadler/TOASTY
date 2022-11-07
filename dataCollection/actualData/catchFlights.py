@@ -3,7 +3,7 @@ import time
 import pickle as pkl
 import os
 import numpy as np
-from dataCollection.SanDiego import SanDiego
+from dataCollection.airports.SanDiego import SanDiego
 
 
 # initialize FlightRadar24 API

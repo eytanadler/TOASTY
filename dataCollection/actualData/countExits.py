@@ -2,7 +2,7 @@ import numpy as np
 from tabulate import tabulate
 from os import listdir
 from os.path import isfile, join, dirname
-from dataCollection.SanDiego import SanDiego
+from dataCollection.airports.SanDiego import SanDiego
 from dataCollection.plotting.makeItPretty import openPickle, extractTrail, plotMap
 
 def countTotals(folderPath, airport):
@@ -15,9 +15,9 @@ def countTotals(folderPath, airport):
         trail = extractTrail(flightDetails)
 
         exitCode = airport.findExitForTrail(trail)
-        # if exitCode is None:
-        #     plotMap(flightDetails, airport, show=True)
-        #     print("yikes", file)
+        if exitCode is None:
+            plotMap(flightDetails, airport, show=True)
+            print("yikes", file)
         # elif exitCode != 8:
         #     print(f"{file} registered as {exitCode+1}")
         #     plotMap(flightDetails, airport, show=True)

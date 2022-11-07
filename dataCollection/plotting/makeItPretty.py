@@ -4,7 +4,7 @@ import pickle as pkl
 from os import listdir
 from os.path import isfile, join, dirname
 import tilemapbase as tmb
-from dataCollection.SanDiego import SanDiego
+from dataCollection.airports.SanDiego import SanDiego
 
 
 t = tmb.tiles.build_OSM()

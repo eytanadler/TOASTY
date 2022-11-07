@@ -1,0 +1,18 @@
+yikes AS3381_STS_to_SAN
+yikes WN2219_OAK_to_SAN
+yikes FX979_DEN_to_SAN
+Totals for SAN:
+-  -
+1  0
+2  3
+3  1
+4  0
+5  0
+6  0
+7  0
+8  0
+9  0
+-  -
+
+NOTES
+make box for exit 3 larger to catch WN2219
