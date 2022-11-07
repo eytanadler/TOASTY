@@ -1,0 +1,22 @@
+yikes AA2743_SAN_to_DFW
+yikes XE421_SAN_to_PHX
+WN2285_SAN_to_LAS registered as 3
+yikes FTH926_SAN_to_APA
+yikes 1I630_SAN_to_IAD
+Totals for SAN:
+-  --
+1   0
+2   0
+3   1
+4   0
+5   0
+6   0
+7   0
+8   0
+9  72
+-  --
+
+
+NOTE:
+4 none data points are from cargo planes getting on the opposite side of the runway
+WN2285 is a mess, it has points from exit 3 and exit 9 and should be thrown out
