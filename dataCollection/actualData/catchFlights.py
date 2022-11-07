@@ -3,6 +3,7 @@ import time
 import pickle as pkl
 import os
 import numpy as np
+import logging
 
 
 # initialize FlightRadar24 API
@@ -117,6 +118,12 @@ def catchDepartures(airport, openTime, refreshRate=120):
     flightNumbers = []
 
     first = True
+
+    # set up logging for exceptions
+    logging.basicConfig(filename=os.path.join(os.path.dirname(__file__), "departure_log"),
+                        level=logging.DEBUG, format='%(asctime)s %(levelname)s %(name)s %(message)s')
+    logger = logging.getLogger(__name__)
+
     # leave this running until we hit endTime
     while time.time() < endTime:
         print("checking")
@@ -126,32 +133,35 @@ def catchDepartures(airport, openTime, refreshRate=120):
             time.sleep(refreshRate)
         first = False
 
-        # try:
-        allFlights = fr_api.get_flights(airport=airport.code)
+        try:
+            allFlights = fr_api.get_flights(airport=airport.code)
 
-        for flight in allFlights:
+            for flight in allFlights:
 
-            # just look for new flights with our designated airport as the origin
-            if flight.number not in flightNumbers and flight.origin_airport_iata == airport.code:
+                # just look for new flights with our designated airport as the origin
+                if flight.number not in flightNumbers and flight.origin_airport_iata == airport.code:
 
-                # check to see if the flight is in the air
-                if flight.on_ground == 0:
-                    print(f"found flight {flight.number}")
-                    flightNumbers.append(flight.number)
-                    saveFlightInfo(flight, airport)
-
-                # if the flight is on the ground make sure it's left the origin airport
-                elif flight.on_ground == 1:
-                    if not flightAtAirport(airport, flight):
+                    # check to see if the flight is in the air
+                    if flight.on_ground == 0:
                         print(f"found flight {flight.number}")
                         flightNumbers.append(flight.number)
                         saveFlightInfo(flight, airport)
 
-                    else:
-                        print(f"hi {flight.number}")
+                    # if the flight is on the ground make sure it's left the origin airport
+                    elif flight.on_ground == 1:
+                        if not flightAtAirport(airport, flight):
+                            print(f"found flight {flight.number}")
+                            flightNumbers.append(flight.number)
+                            saveFlightInfo(flight, airport)
 
-        # except Exception:
-        #     continue
+                        else:
+                            print(f"hi {flight.number}")
+
+        # log exceptions but move on
+        except Exception as ex:
+            print(ex)
+            logger.error(ex)
+            continue
 
 
 def catchArrivals(airport, openTime, refreshRate=60):
@@ -176,6 +186,12 @@ def catchArrivals(airport, openTime, refreshRate=60):
     flightNumbers = []
 
     first = True
+
+    # set up logging for exceptions
+    logging.basicConfig(filename=os.path.join(os.path.dirname(__file__), "arrival_log"),
+                        level=logging.DEBUG, format='%(asctime)s %(levelname)s %(name)s %(message)s')
+    logger = logging.getLogger(__name__)
+
     # leave this running until we hit endTime
     while time.time() < endTime:
         print("checking")
@@ -185,22 +201,25 @@ def catchArrivals(airport, openTime, refreshRate=60):
             time.sleep(refreshRate)
         first = False
 
-        # try:
-        allFlights = fr_api.get_flights(airport=airport.code)
+        try:
+            allFlights = fr_api.get_flights(airport=airport.code)
 
-        for flight in allFlights:
+            for flight in allFlights:
 
-            # just look for new flights with our designated airport as the destination
-            if flight.number not in flightNumbers and flight.destination_airport_iata == airport.code:
+                # just look for new flights with our designated airport as the destination
+                if flight.number not in flightNumbers and flight.destination_airport_iata == airport.code:
 
-                # flight has to be on the ground
-                if flight.on_ground == 1:
+                    # flight has to be on the ground
+                    if flight.on_ground == 1:
 
-                    # flight has to be at detination airport
-                    if flightAtAirport(airport, flight):
-                        print(f"found flight {flight.number}")
-                        flightNumbers.append(flight.number)
-                        saveFlightInfo(flight, airport)
+                        # flight has to be at detination airport
+                        if flightAtAirport(airport, flight):
+                            print(f"found flight {flight.number}")
+                            flightNumbers.append(flight.number)
+                            saveFlightInfo(flight, airport)
 
-        # except Exception:
-        #     continue
+        # log exceptions but move on
+        except Exception as ex:
+            print(ex)
+            logger.error(ex)
+            continue
