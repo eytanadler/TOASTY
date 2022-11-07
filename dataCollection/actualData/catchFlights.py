@@ -3,7 +3,6 @@ import time
 import pickle as pkl
 import os
 import numpy as np
-from dataCollection.airports.SanDiego import SanDiego
 
 
 # initialize FlightRadar24 API
@@ -205,8 +204,3 @@ def catchArrivals(airport, openTime, refreshRate=60):
 
         # except Exception:
         #     continue
-
-
-airport = SanDiego()
-# catchDepartures(airport, 3600)
-catchArrivals(airport, 1000)

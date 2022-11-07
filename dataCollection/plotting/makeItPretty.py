@@ -2,9 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle as pkl
 from os import listdir
-from os.path import isfile, join, dirname
+from os.path import isfile, join
 import tilemapbase as tmb
-from dataCollection.airports.SanDiego import SanDiego
 
 
 t = tmb.tiles.build_OSM()
@@ -128,16 +127,3 @@ def plotAllInFolder(path, airport):
 
         flightDetails = openPickle(fullName)
         plotMap(flightDetails, airport, show=True)
-
-
-# departurePath = join(dirname(__file__), "../actualData/departures")
-# airport = SanDiego()
-# plotAllInFolder(departurePath, airport)
-
-# f = "../actualData/departures/WN2777_SAN_to_LAS"
-# file = openPickle(f)
-# plotMap(file, airport, True)
-
-# arrivalPath = join(dirname(__file__), "../actualData/arrivals")
-# airport = SanDiego()
-# plotAllInFolder(arrivalPath, airport)
