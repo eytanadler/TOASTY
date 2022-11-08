@@ -6,6 +6,7 @@ from os.path import isfile, join
 import tilemapbase as tmb
 
 
+tmb.init(create=True)
 t = tmb.tiles.build_OSM()
 
 
@@ -127,3 +128,42 @@ def plotAllInFolder(path, airport):
 
         flightDetails = openPickle(fullName)
         plotMap(flightDetails, airport, show=True)
+
+
+def plotExitBoxes(exitList, airport, show=False):
+    """
+    Plot the bounding box enclosing a runway exit on top of the map
+
+    Parameters
+    ----------
+    exitList : array
+        list of which exit boxes to plot
+    airport : Airport class
+        airport being studied for this case
+    show : bool, optional
+        whether to show the plot, by default False, then it saves the figure
+    """
+    extent = tmb.Extent.from_lonlat(airport.centerLoc[0] - airport.longRange, airport.centerLoc[0] + airport.longRange, airport.centerLoc[1] - airport.latRange, airport.centerLoc[1] + airport.latRange)
+    _, ax = plt.subplots()
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+
+    plotter = tmb.Plotter(extent, t, width=1200)
+    plotter.plot(ax, t)
+
+    for i in exitList:
+        coords = airport.exitLocations[i][:]
+        x1, y1 = tmb.project(*(coords[0], coords[3]))
+        x2, y2 = tmb.project(*(coords[1], coords[3]))
+        x3, y3 = tmb.project(*(coords[1], coords[2]))
+        x4, y4 = tmb.project(*(coords[0], coords[2]))
+
+        x = [x1, x2, x3, x4, x1]
+        y = [y1, y2, y3, y4, y1]
+
+        ax.plot(x, y, color="black")
+
+    if show:
+        plt.show()
+    else:
+        plt.savefig(f"Exits for {airport.code}")
