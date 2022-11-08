@@ -73,7 +73,7 @@ def saveFlightInfo(flight, airport, outFolder):
         flightFile.close()
 
 
-def flightAtAirport(airport, flight, atol=0.1):
+def flightAtAirport(airport, flight):
     """
     Check to see if a flight is at a given airport using longitude and latitude values and a specified tolerance
 
@@ -83,8 +83,6 @@ def flightAtAirport(airport, flight, atol=0.1):
         from FlightRadar24 API representing a single flight
     airport : Airport class
         airport being studied for this case
-    atol : float, optional
-        absolute tolerance for numpy.allclose() comparison, by default 0.1
 
     Returns
     -------
@@ -94,7 +92,7 @@ def flightAtAirport(airport, flight, atol=0.1):
     airportCoord = airport.centerLoc
     flightCoord = [flight.longitude, flight.latitude]
 
-    atAirport = np.allclose(airportCoord, flightCoord, atol=atol)
+    atAirport = np.allclose(airportCoord, flightCoord, atol=airport.atol)
     return atAirport
 
 
@@ -121,8 +119,11 @@ def catchDepartures(airport, openTime, outFolder, refreshRate=120):
     first = True
 
     # set up logging for exceptions
-    logging.basicConfig(filename=os.path.join(os.path.dirname(__file__), "departure_log"),
-                        level=logging.DEBUG, format='%(asctime)s %(levelname)s %(name)s %(message)s')
+    logging.basicConfig(
+        filename=os.path.join(os.path.dirname(__file__), "departure_log"),
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     logger = logging.getLogger(__name__)
 
     # leave this running until we hit endTime
@@ -190,8 +191,11 @@ def catchArrivals(airport, openTime, outFolder, refreshRate=60):
     first = True
 
     # set up logging for exceptions
-    logging.basicConfig(filename=os.path.join(os.path.dirname(__file__), "arrival_log"),
-                        level=logging.DEBUG, format='%(asctime)s %(levelname)s %(name)s %(message)s')
+    logging.basicConfig(
+        filename=os.path.join(os.path.dirname(__file__), "arrival_log"),
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     logger = logging.getLogger(__name__)
 
     # leave this running until we hit endTime
