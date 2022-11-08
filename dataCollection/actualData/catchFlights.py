@@ -4,13 +4,14 @@ import pickle as pkl
 import os
 import numpy as np
 import logging
+from dataCollection.plotting.makeItPretty import extractTrail
 
 
 # initialize FlightRadar24 API
 fr_api = FlightRadar24API()
 
 
-def flightIDString(flight, airport):
+def flightIDString(flight, airport, outFolder):
     """
     Create a nice string for a flight filename
 
@@ -32,23 +33,23 @@ def flightIDString(flight, airport):
 
     # set whether we're looking at an arrival or a departure for our given airport
     if origin == airport.code:
-        folder = "departures"
+        subFolder = "departures"
     elif destination == airport.code:
-        folder = "arrivals"
+        subFolder = "arrivals"
 
     # in some cases we lose the origin, destination, or airline info - manually save these to avoid killing the data collection
     if origin == "N/A" or destination == "N/A" or airline == "N/A":
-        fileName = os.path.join(os.path.dirname(__file__), f"debug/{flight.id}")
+        fileName = os.path.join(os.path.dirname(__file__), f"{outFolder}/debug/{flight.id}")
         debugFile = open(fileName, "wb")
         pkl.dump(fr_api.get_flight_details(flight.id), debugFile)
         debugFile.close()
 
         return "debug"
 
-    return f"{folder}/{flight.number}_{origin}_to_{destination}"
+    return f"{outFolder}/{subFolder}/{flight.number}_{origin}_to_{destination}"
 
 
-def saveFlightInfo(flight, airport):
+def saveFlightInfo(flight, airport, outFolder):
     """
     Saves the flight details into a pickle file
 
@@ -61,7 +62,7 @@ def saveFlightInfo(flight, airport):
     """
     flightDetails = fr_api.get_flight_details(flight.id)
 
-    fname = flightIDString(flight, airport)
+    fname = flightIDString(flight, airport, outFolder)
 
     if fname != "debug":
         print(f"saving {fname}")
@@ -97,7 +98,7 @@ def flightAtAirport(airport, flight, atol=0.1):
     return atAirport
 
 
-def catchDepartures(airport, openTime, refreshRate=120):
+def catchDepartures(airport, openTime, outFolder, refreshRate=120):
     """
     Catch departures that left or are leaving <airport> over <openTime>
     Checks again every <refreshRate>
@@ -145,14 +146,14 @@ def catchDepartures(airport, openTime, refreshRate=120):
                     if flight.on_ground == 0:
                         print(f"found flight {flight.number}")
                         flightNumbers.append(flight.number)
-                        saveFlightInfo(flight, airport)
+                        saveFlightInfo(flight, airport, outFolder)
 
                     # if the flight is on the ground make sure it's left the origin airport
                     elif flight.on_ground == 1:
                         if not flightAtAirport(airport, flight):
                             print(f"found flight {flight.number}")
                             flightNumbers.append(flight.number)
-                            saveFlightInfo(flight, airport)
+                            saveFlightInfo(flight, airport, outFolder)
 
                         else:
                             print(f"hi {flight.number}")
@@ -164,12 +165,13 @@ def catchDepartures(airport, openTime, refreshRate=120):
             continue
 
 
-def catchArrivals(airport, openTime, refreshRate=60):
+def catchArrivals(airport, openTime, outFolder, refreshRate=60):
     """
     Catch flights that have arrived at <airport> over <openTime>
     Checks again every <refreshRate>
     Flights have to be on the ground at destination airport for arrival taxiing info to be present
     Flights have to be caught before they switch to being classified as a departing flight, so refresh is lower than catchDepartures()
+    Flights also can't be caught before they've exited the runway
 
     Parameters
     ----------
@@ -214,9 +216,18 @@ def catchArrivals(airport, openTime, refreshRate=60):
 
                         # flight has to be at detination airport
                         if flightAtAirport(airport, flight):
-                            print(f"found flight {flight.number}")
-                            flightNumbers.append(flight.number)
-                            saveFlightInfo(flight, airport)
+                            # check if aircraft has gone through an exit yet - this returns None if it hasn't
+                            trail = extractTrail(fr_api.get_flight_details(flight.id))
+                            exitCode = airport.findExitForTrail(trail)
+                            print(f"flight {flight.number} exited at {exitCode}")
+
+                            # flight has to be off the runway or we'll wait to get it next time
+                            if exitCode is not None:
+                                print(f"found flight {flight.number}")
+                                flightNumbers.append(flight.number)
+                                saveFlightInfo(flight, airport, outFolder)
+                            else:
+                                print(f"skip flight {flight.number}")
 
         # log exceptions but move on
         except Exception as ex:
