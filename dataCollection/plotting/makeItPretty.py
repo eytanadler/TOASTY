@@ -4,6 +4,7 @@ import pickle as pkl
 from os import listdir
 from os.path import isfile, join
 import tilemapbase as tmb
+import niceplots as nice
 
 
 tmb.init(create=True)
@@ -28,7 +29,11 @@ def openPickle(fileName):
     flightDetails = pkl.load(flightFile)
     flightFile.close()
 
+    if not isinstance(flightDetails, dict):
+        flightDetails = None
+
     return flightDetails
+
 
 def flightIDString(flightDetails):
     """
@@ -44,9 +49,20 @@ def flightIDString(flightDetails):
     string
         nice string for a title or something
     """
-    callsign = flightDetails["identification"]["callsign"]
-    origin = flightDetails["airport"]["origin"]["code"]["iata"]
-    destination = flightDetails["airport"]["destination"]["code"]["iata"]
+    if flightDetails["identification"]["callsign"] is not None:
+        callsign = flightDetails["identification"]["callsign"]
+    else:
+        callsign = "Unknown"
+
+    if flightDetails["airport"]["origin"] is not None:
+        origin = flightDetails["airport"]["origin"]["code"]["iata"]
+    else:
+        origin = "Unknown"
+
+    if flightDetails["airport"]["destination"] is not None:
+        destination = flightDetails["airport"]["destination"]["code"]["iata"]
+    else:
+        destination = "Unknown"
 
     return f"Flight {callsign} from {origin} to {destination}"
 
@@ -87,22 +103,28 @@ def plotMap(flightDetails, airport, show=False):
     show : bool, optional
         whether to show the plot, by default False, then it saves the figure
     """
+    nice.setRCParams()
     flightID = flightIDString(flightDetails)
     latlong = extractTrail(flightDetails)
 
-    extent = tmb.Extent.from_lonlat(airport.centerLoc[0] - airport.longRange, airport.centerLoc[0] + airport.longRange, airport.centerLoc[1] - airport.latRange, airport.centerLoc[1] + airport.latRange)
-    _, ax = plt.subplots()
+    extent = tmb.Extent.from_lonlat(
+        airport.centerLoc[0] - airport.longRange,
+        airport.centerLoc[0] + airport.longRange,
+        airport.centerLoc[1] - airport.latRange,
+        airport.centerLoc[1] + airport.latRange,
+    )
+    _, ax = plt.subplots(figsize=(32, 18))
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
 
-    plotter = tmb.Plotter(extent, t, width=600)
+    plotter = tmb.Plotter(extent, t, width=1200)
     plotter.plot(ax, t)
 
     for point in latlong:
         x, y = tmb.project(*point)
-        ax.scatter(x, y, color="black", s=9)
+        ax.scatter(x, y, color="black", s=40)
 
-    plt.title(flightID)
+    plt.title(flightID, fontsize=30)
 
     if show:
         plt.show()
