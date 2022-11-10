@@ -1,5 +1,6 @@
 from os.path import join, dirname
 from dataCollection.airports.SanDiego import SanDiego
+from dataCollection.airports.Detroit import Detroit
 from dataCollection.plotting.makeItPretty import plotAllInFolder, openPickle, plotMap, plotExitBoxes
 
 # departurePath = join(dirname(__file__), "../actualData/departures")
@@ -14,6 +15,6 @@ from dataCollection.plotting.makeItPretty import plotAllInFolder, openPickle, pl
 # airport = SanDiego()
 # plotAllInFolder(arrivalPath, airport)
 
-airport = SanDiego()
-exitList = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+airport = Detroit()
+exitList = [0, 1, 2, 3, 4, 5, 6, 7]
 plotExitBoxes(exitList, airport, True)
