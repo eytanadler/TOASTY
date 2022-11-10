@@ -152,7 +152,7 @@ def plotAllInFolder(path, airport):
         plotMap(flightDetails, airport, show=True)
 
 
-def plotExitBoxes(exitList, airport, show=False):
+def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
     """
     Plot the bounding box enclosing a runway exit on top of the map
 
@@ -173,17 +173,31 @@ def plotExitBoxes(exitList, airport, show=False):
     plotter = tmb.Plotter(extent, t, width=1200)
     plotter.plot(ax, t)
 
-    for i in exitList:
-        coords = airport.exitLocations[i][:]
-        x1, y1 = tmb.project(*(coords[0], coords[3]))
-        x2, y2 = tmb.project(*(coords[1], coords[3]))
-        x3, y3 = tmb.project(*(coords[1], coords[2]))
-        x4, y4 = tmb.project(*(coords[0], coords[2]))
+    if exitList is not None:
+        for i in exitList:
+            coords = airport.exitLocations[i][:]
+            x1, y1 = tmb.project(*(coords[0], coords[3]))
+            x2, y2 = tmb.project(*(coords[1], coords[3]))
+            x3, y3 = tmb.project(*(coords[1], coords[2]))
+            x4, y4 = tmb.project(*(coords[0], coords[2]))
 
-        x = [x1, x2, x3, x4, x1]
-        y = [y1, y2, y3, y4, y1]
+            x = [x1, x2, x3, x4, x1]
+            y = [y1, y2, y3, y4, y1]
 
-        ax.plot(x, y, color="black")
+            ax.plot(x, y, color="black")
+
+    if plotAll is True:     # duplicated code is the root of all eveil but I am TIRED TODO
+        for i in range(len(airport.exitLocations)):
+            coords = airport.exitLocations[i][:]
+            x1, y1 = tmb.project(*(coords[0], coords[3]))
+            x2, y2 = tmb.project(*(coords[1], coords[3]))
+            x3, y3 = tmb.project(*(coords[1], coords[2]))
+            x4, y4 = tmb.project(*(coords[0], coords[2]))
+
+            x = [x1, x2, x3, x4, x1]
+            y = [y1, y2, y3, y4, y1]
+
+            ax.plot(x, y, color="black")
 
     if show:
         plt.show()
