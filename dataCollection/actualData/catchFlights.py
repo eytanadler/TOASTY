@@ -217,6 +217,7 @@ def catchArrivals(airport, openTime, outFolder, refreshRate=60):
 
                     # flight has to be on the ground
                     if flight.on_ground == 1:
+                        print(f"hi {flight.number}")
 
                         # flight has to be at detination airport
                         if flightAtAirport(airport, flight):

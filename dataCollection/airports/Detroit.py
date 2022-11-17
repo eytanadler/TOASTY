@@ -10,7 +10,6 @@ class Detroit(Airport):
     # runway info
     nRunways = 6
 
-    nExits = 32958734698734698
     exitLocations = np.array(
         (  # 4L/22R - A
             (-83.383795, -83.382100, 42.201447, 42.202170),  # A1
@@ -69,6 +68,8 @@ class Detroit(Airport):
             (-83.351934, -83.350799, 42.231329, 42.231937),  # Z10
         )
     )
+
+    nExits = exitLocations.shape[0]
 
     # plotting info
     centerLoc = [-83.358, 42.214]

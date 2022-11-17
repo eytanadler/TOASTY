@@ -40,9 +40,6 @@ def countTotals(folderPath, airport, debug=False):
                 if exitCode is None:
                     plotMap(flightDetails, airport, show=True)
                     print("yikes", file)
-                # elif exitCode != 8:
-                #     print(f"{file} registered as {exitCode+1}")
-                #     plotMap(flightDetails, airport, show=True)
 
             if exitCode is not None:
                 exitCount[exitCode] += 1
@@ -65,9 +62,18 @@ def tabulateExits(category, airport, exitCount):
     exitCount : _type_
         _description_
     """
-    print(f"{category} totals for {airport.code}:")
+    totalMovements = np.sum(exitCount)
     table = []
+
+    print(f"{category} totals for {airport.code}:")
+
     for i in range(airport.nExits):
-        table.append([f"{i+1}", exitCount[i]])
-    table.append(["Error", exitCount[-1]])
-    print(tabulate(table))
+        ex = exitCount[i]
+        percentOfMove = ex / totalMovements * 100
+
+        table.append([f"{i+1}", ex, percentOfMove])
+
+    table.append(["Error", exitCount[-1], exitCount[-1] / totalMovements * 100])
+
+    headers = ["Exit", "Flights using exit", "As % total"]
+    print(tabulate(table, headers, floatfmt=(".0f", ".0f", ".2f")))
