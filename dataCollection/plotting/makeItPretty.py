@@ -200,6 +200,61 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
             ax.plot(x, y, color="black")
 
     if show:
+        plt.title(f"Exit bounds for {airport.code}")
         plt.show()
     else:
-        plt.savefig(f"Exits for {airport.code}")
+        plt.savefig(f"exit_bounds_{airport.code}.png")
+
+
+def plotHeatMap(airport, exitPercent, date, departures=True, show=False):
+    """
+    Plot a heat map (really just some dots representing frequency) on an airport map
+    Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
+    This seemed easier than adjusting the colorbar bounds
+
+    Parameters
+    ----------
+    airport : Airport class
+        airport being studied for this case
+    exitPercent : list
+        Percentages of aircraft using each exit
+    dateString : string
+        date this data is from
+    departures : bool, optional
+        whether this data is from departing aircraft, used for titles, by default True
+    show : bool, optional
+        whether to show the plot, by default False, then it saves the figure
+    """
+    extent = tmb.Extent.from_lonlat(airport.centerLoc[0] - airport.longRange, airport.centerLoc[0] + airport.longRange, airport.centerLoc[1] - airport.latRange, airport.centerLoc[1] + airport.latRange)
+    _, ax = plt.subplots(figsize=(16, 9))
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+
+    plotter = tmb.Plotter(extent, t, width=1200)
+    plotter.plot(ax, t)
+
+    normalizedPercent = (exitPercent - np.min(exitPercent)) / (np.max(exitPercent) - np.min(exitPercent))
+
+    allX = []
+    allY = []
+    for ex in airport.exitLocations:
+        long = np.average((ex[0], ex[1]))
+        lat = np.average((ex[2], ex[3]))
+
+        x, y = tmb.project(*(long, lat))
+        allX.append(x)
+        allY.append(y)
+
+    if departures:
+        key = "departures"
+    else:
+        key = "arrivals"
+
+    plt.title(f"Exit heat map for {airport.code} {key} on {date}")
+    plt.scatter(x=allX, y=allY, c=normalizedPercent, cmap="plasma", s=55)
+    plt.colorbar(label="Exit use frequency", orientation="vertical", shrink=0.6)
+
+    if show:
+        plt.show()
+    else:
+        plt.savefig(f"exit_heatmap_{airport.code}_{key}_{date}.png")
