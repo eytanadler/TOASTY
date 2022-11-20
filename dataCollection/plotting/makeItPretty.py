@@ -99,13 +99,14 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
             x = [x1, x2, x3, x4, x1]
             y = [y1, y2, y3, y4, y1]
 
-            ax.plot(x, y, color="black")
+            ax.plot(x, y, color="black", linewidth=0.75)
+
+    plt.title(f"Exit bounds for {airport.code}")
 
     if show:
-        plt.title(f"Exit bounds for {airport.code}")
         plt.show()
     else:
-        plt.savefig(f"exit_bounds_{airport.code}.png")
+        plt.savefig(f"exit_bounds_{airport.code}.png", dpi=600, bbox_inches='tight')
 
 
 def plotHeatMap(airport, exitPercent, date, departures=True, show=False):
@@ -148,18 +149,20 @@ def plotHeatMap(airport, exitPercent, date, departures=True, show=False):
         allY.append(y)
 
     if departures:
-        key = "departures"
+        key1 = "departures"
+        key2 = "Exit"
     else:
-        key = "arrivals"
+        key1 = "arrivals"
+        key2 = "Entrance"
 
-    plt.title(f"Exit heat map for {airport.code} {key} on {date}")
+    plt.title(f"{key2} heat map for {airport.code} {key1} on {date}")
     plt.scatter(x=allX, y=allY, c=normalizedPercent, cmap="plasma", s=55)
-    plt.colorbar(label="Exit use frequency", orientation="vertical", shrink=0.6)
+    plt.colorbar(label=f"{key2} use frequency", orientation="vertical", shrink=0.6)
 
     if show:
         plt.show()
     else:
-        plt.savefig(f"exit_heatmap_{airport.code}_{key}_{date}.png")
+        plt.savefig(f"{key2}_heatmap_{airport.code}_{key1}_{date}.png")
 
 
 def plotAllInFolder(path, airport):
