@@ -48,10 +48,10 @@ def callback_plot(x, fname=None):
 
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "ORD_250w_temp400")
+out_folder = os.path.join(cur_dir, "ORD_1000w")
 use_snopt = False
 airport = "ORD"  # set to None to do other problem
-resolution = "250w"
+resolution = "1000w"
 min_density = 1e-3  # lower bound on density
 
 apt_data = load_airport(airport, resolution)
@@ -96,7 +96,7 @@ simp = prob.model.add_subsystem(
 
 prob.model.add_objective("mass")
 prob.model.add_design_var("density_dv", lower=density_lower, upper=density_upper)
-prob.model.add_constraint("max_temp_dumb", upper=400)
+prob.model.add_constraint("max_temp_dumb", upper=375)
 
 os.makedirs(out_folder, exist_ok=True)
 
