@@ -48,17 +48,13 @@ def callback_plot(x, fname=None):
 
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "DTW_1000w")
+out_folder = os.path.join(cur_dir, "ORD_250w_temp400")
 use_snopt = False
-airport = "DTW"  # set to None to do other problem
-resolution = "1000w"
+airport = "ORD"  # set to None to do other problem
+resolution = "250w"
 min_density = 1e-3  # lower bound on density
 
 apt_data = load_airport(airport, resolution)
-
-# Get rid of the case where all the terminals are sinks at once
-del apt_data["T_set_node"]["dumb"]
-del apt_data["q_elem"]["dumb"]
 
 cases = apt_data["q_elem"].keys()
 nx, ny, xlim, ylim = (apt_data["num_x"], apt_data["num_y"], apt_data["x_lim"], apt_data["y_lim"])
@@ -100,9 +96,7 @@ simp = prob.model.add_subsystem(
 
 prob.model.add_objective("mass")
 prob.model.add_design_var("density_dv", lower=density_lower, upper=density_upper)
-prob.model.add_constraint("max_temp_evans", upper=1000)
-prob.model.add_constraint("max_temp_macnamera", upper=700)
-prob.model.add_constraint("max_temp_macnamera_satellite", upper=900)
+prob.model.add_constraint("max_temp_dumb", upper=400)
 
 os.makedirs(out_folder, exist_ok=True)
 
@@ -136,25 +130,25 @@ else:
     prob.driver.opt_settings["mu_strategy"] = "adaptive"
     prob.driver.opt_settings["corrector_type"] = "affine"
     prob.driver.opt_settings["limited_memory_max_history"] = 100
-    prob.driver.opt_settings["linear_solver"] = "ma86"
     prob.driver.opt_settings["corrector_type"] = "primal-dual"
     prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
+    prob.driver.opt_settings["linear_solver"] = "ma86"
 
 prob.setup(mode="rev")
 
 mesh_x, mesh_y = simp.get_mesh()
 
-# Start with a circle for the meme
-x_mid = (xlim[0] + xlim[1]) / 2
-y_mid = (ylim[0] + ylim[1]) / 2
-r_circ = min(xlim[1] - xlim[0], ylim[1] - ylim[0]) / 2
+# # Start with a circle for the meme
+# x_mid = (xlim[0] + xlim[1]) / 2
+# y_mid = (ylim[0] + ylim[1]) / 2
+# r_circ = min(xlim[1] - xlim[0], ylim[1] - ylim[0]) / 2
 
-x_centroid = mesh_x[:-1, :-1] + mesh_x[1, 1] / 2
-y_centroid = mesh_y[:-1, :-1] + mesh_y[1, 1] / 2
-dens_circ = ((x_centroid - x_mid)**2 + (y_centroid - y_mid)**2) < r_circ**2
-dens_circ = dens_circ.astype(float)
-dens_circ[dens_circ < min_density] = min_density
-prob.set_val("density_dv", dens_circ.flatten())
+# x_centroid = mesh_x[:-1, :-1] + mesh_x[1, 1] / 2
+# y_centroid = mesh_y[:-1, :-1] + mesh_y[1, 1] / 2
+# dens_circ = ((x_centroid - x_mid)**2 + (y_centroid - y_mid)**2) < r_circ**2
+# dens_circ = dens_circ.astype(float)
+# dens_circ[dens_circ < min_density] = min_density
+# prob.set_val("density_dv", dens_circ.flatten())
 
 # prob.run_model()
 prob.run_driver()
