@@ -101,15 +101,15 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
 
             ax.plot(x, y, color="black", linewidth=0.75)
 
-    plt.title(f"Exit bounds for {airport.code}")
+    plt.title(f"Taxiway exit/entrance bounds for {airport.code}")
 
     if show:
         plt.show()
     else:
-        plt.savefig(f"exit_bounds_{airport.code}.png", dpi=600, bbox_inches='tight')
+        plt.savefig(f"figures/bounds_{airport.code}.png", dpi=600, bbox_inches='tight')
 
 
-def plotHeatMap(airport, exitPercent, date, departures=True, show=False):
+def plotFrequenciesColor(airport, exitPercent, date, departures=True, show=False):
     """
     Plot a heat map (really just some dots representing frequency) on an airport map
     Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
@@ -155,14 +155,64 @@ def plotHeatMap(airport, exitPercent, date, departures=True, show=False):
         key1 = "arrivals"
         key2 = "Entrance"
 
-    plt.title(f"{key2} heat map for {airport.code} {key1} on {date}")
+    plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
     plt.scatter(x=allX, y=allY, c=normalizedPercent, cmap="plasma", s=55)
     plt.colorbar(label=f"{key2} use frequency", orientation="vertical", shrink=0.6)
 
     if show:
         plt.show()
     else:
-        plt.savefig(f"{key2}_heatmap_{airport.code}_{key1}_{date}.png")
+        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches='tight')
+
+def plotFrequenciesSize(airport, exitPercent, date, departures=True, show=False):
+    """
+    Plot a heat map (really just some dots representing frequency) on an airport map
+    Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
+    This seemed easier than adjusting the colorbar bounds
+
+    Parameters
+    ----------
+    airport : Airport class
+        airport being studied for this case
+    exitPercent : list
+        Percentages of aircraft using each exit
+    dateString : string
+        date this data is from
+    departures : bool, optional
+        whether this data is from departing aircraft, used for titles, by default True
+    show : bool, optional
+        whether to show the plot, by default False, then it saves the figure
+    """
+    extent = tmb.Extent.from_lonlat(airport.centerLoc[0] - airport.longRange, airport.centerLoc[0] + airport.longRange, airport.centerLoc[1] - airport.latRange, airport.centerLoc[1] + airport.latRange)
+    _, ax = plt.subplots(figsize=(16, 9))
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+
+    plotter = tmb.Plotter(extent, t, width=1200)
+    plotter.plot(ax, t)
+
+    normalizedPercent = (exitPercent - np.min(exitPercent)) / (np.max(exitPercent) - np.min(exitPercent))
+
+    for i, ex in enumerate(airport.exitLocations):
+        long = np.average((ex[0], ex[1]))
+        lat = np.average((ex[2], ex[3]))
+
+        x, y = tmb.project(*(long, lat))
+        ax.plot(x, y, marker="o", markersize=10*int(normalizedPercent[i] + 1), color="c", alpha=0.7)
+
+    if departures:
+        key1 = "departures"
+        key2 = "Exit"
+    else:
+        key1 = "arrivals"
+        key2 = "Entrance"
+
+    plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
+
+    if show:
+        plt.show()
+    else:
+        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches='tight')
 
 
 def plotAllInFolder(path, airport):
