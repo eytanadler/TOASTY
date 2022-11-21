@@ -1,7 +1,7 @@
 from os.path import join, dirname
 from dataCollection.airports.SanDiego import SanDiego
-from dataCollection.airports.Detroit import Detroit
-from dataCollection.plotting.makeItPretty import plotAllInFolder, openPickle, plotMap, plotExitBoxes
+from dataCollection.airports.Chicago import Chicago
+from dataCollection.plotting.makeItPretty import plotAllInFolder, openPickle, plotMap, plotExitBoxes, plotFrequenciesColor, plotFrequenciesSize
 
 # departurePath = join(dirname(__file__), "../actualData/departures")
 # airport = SanDiego()
@@ -15,9 +15,27 @@ from dataCollection.plotting.makeItPretty import plotAllInFolder, openPickle, pl
 # airport = SanDiego()
 # plotAllInFolder(arrivalPath, airport)
 
-airport = Detroit()
-exitList = [0, 1, 2, 3, 4, 5, 6, 7]
-plotExitBoxes(airport, plotAll=True, show=True)
+# show = True
+# airport = SanDiego()
+# exitPercent = [0, 0, 0, 0, 0, 0.0769, 0.3462, 0.5769, 0, 0, 0, 0, 0, 0, 0]
+# # plotFrequenciesColor(airport, exitPercent, "11-7", False, show)
+# plotFrequenciesSize(airport, exitPercent, "11-7", False, show)
+
+# exitPercent = [88.46, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 9.62, 0.00, 0.00, 0.00, 0.00, 0.00]
+# # plotFrequenciesColor(airport, exitPercent, "11-7", True, show)
+# plotFrequenciesSize(airport, exitPercent, "11-7", True, show)
+
+# exitPercent = [0.00, 0.00, 4.55, 0.91, 0.91, 5.00, 62.73, 25.91, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00]
+# # plotFrequenciesColor(airport, exitPercent, "11-8", False, show)
+# plotFrequenciesSize(airport, exitPercent, "11-8", False, show)
+
+# exitPercent = [0.6308, 0, 0.0036, 0.0108, 0.0072, 0.0, 0.0, 0.0, 0.2545, 0.086, 0.0036, 0, 0, 0, 0]
+# # plotFrequenciesColor(airport, exitPercent, "11-8", True, show)
+# plotFrequenciesSize(airport, exitPercent, "11-8", True, show)
+
+
+# exitList = [0, 1, 2, 3, 4, 5, 6, 7]
+# plotExitBoxes(airport, plotAll=True, show=True)
 # airport = SanDiego()
 # exitList = [0, 1, 2, 3, 4, 5, 6, 7, 8]
 # plotExitBoxes(exitList, airport, True)
@@ -35,3 +53,6 @@ plotExitBoxes(airport, plotAll=True, show=True)
 # # plotMap(flightDetails, airport, True)
 
 # plotAllInFolder(departurePath, airport)
+
+airport = Chicago()
+plotExitBoxes(airport, plotAll=True, exitList=None, show=False)

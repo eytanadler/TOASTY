@@ -1,93 +1,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import pickle as pkl
 from os import listdir
 from os.path import isfile, join
 import tilemapbase as tmb
 import niceplots as nice
 
+from dataCollection.plotting.plotUtils import extractTrail, openPickle, flightIDString
+
 
 tmb.init(create=True)
 t = tmb.tiles.build_OSM()
-
-
-def openPickle(fileName):
-    """
-    Opens pickle file containg details of flight
-
-    Parameters
-    ----------
-    fileName : string
-        file name to be opened
-
-    Returns
-    -------
-    flightDetails dictionary
-        dictionary of all details on flight
-    """
-    flightFile = open(fileName, "rb")
-    flightDetails = pkl.load(flightFile)
-    flightFile.close()
-
-    if not isinstance(flightDetails, dict):
-        flightDetails = None
-
-    return flightDetails
-
-
-def flightIDString(flightDetails):
-    """
-    Create a nice string for a flight plot title
-
-    Parameters
-    ----------
-    flightDetails : dict
-        dictionary of all details on flight
-
-    Returns
-    -------
-    string
-        nice string for a title or something
-    """
-    if flightDetails["identification"]["callsign"] is not None:
-        callsign = flightDetails["identification"]["callsign"]
-    else:
-        callsign = "Unknown"
-
-    if flightDetails["airport"]["origin"] is not None:
-        origin = flightDetails["airport"]["origin"]["code"]["iata"]
-    else:
-        origin = "Unknown"
-
-    if flightDetails["airport"]["destination"] is not None:
-        destination = flightDetails["airport"]["destination"]["code"]["iata"]
-    else:
-        destination = "Unknown"
-
-    return f"Flight {callsign} from {origin} to {destination}"
-
-
-def extractTrail(flightDetails):
-    """
-    Get the longitude and latitude from the flightDetails dict in the right order for plotting
-
-    Parameters
-    ----------
-    flightDetails : dict
-        dictionary of all details on flight
-
-    Returns
-    -------
-    numpy array (n, 2)
-        longitude & latitude trail info for a flight for plotting
-    """
-    trail = flightDetails["trail"]
-    latlong = np.zeros((len(trail), 2))
-
-    for i, point in enumerate(trail):
-        latlong[i, :] = [point["lng"], point["lat"]]
-
-    return latlong
 
 
 def plotMap(flightDetails, airport, show=False):
@@ -130,26 +52,6 @@ def plotMap(flightDetails, airport, show=False):
         plt.show()
     else:
         plt.savefig(f"{flightID}.png")
-
-
-def plotAllInFolder(path, airport):
-    """
-    plot all the flight files at a path to debug
-
-    Parameters
-    ----------
-    path : string
-        path to folder of files
-    airport : Airport class
-        airport being studied for this case
-    """
-    departureFiles = [f for f in listdir(path) if isfile(join(path, f))]
-
-    for fileName in departureFiles:
-        fullName = join(path, fileName)
-
-        flightDetails = openPickle(fullName)
-        plotMap(flightDetails, airport, show=True)
 
 
 def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
@@ -197,9 +99,137 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
             x = [x1, x2, x3, x4, x1]
             y = [y1, y2, y3, y4, y1]
 
-            ax.plot(x, y, color="black")
+            ax.plot(x, y, color="black", linewidth=0.75)
+
+    plt.title(f"Taxiway exit/entrance bounds for {airport.code}")
 
     if show:
         plt.show()
     else:
-        plt.savefig(f"Exits for {airport.code}")
+        plt.savefig(f"figures/bounds_{airport.code}.png", dpi=600, bbox_inches='tight')
+
+
+def plotFrequenciesColor(airport, exitPercent, date, departures=True, show=False):
+    """
+    Plot a heat map (really just some dots representing frequency) on an airport map
+    Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
+    This seemed easier than adjusting the colorbar bounds
+
+    Parameters
+    ----------
+    airport : Airport class
+        airport being studied for this case
+    exitPercent : list
+        Percentages of aircraft using each exit
+    dateString : string
+        date this data is from
+    departures : bool, optional
+        whether this data is from departing aircraft, used for titles, by default True
+    show : bool, optional
+        whether to show the plot, by default False, then it saves the figure
+    """
+    extent = tmb.Extent.from_lonlat(airport.centerLoc[0] - airport.longRange, airport.centerLoc[0] + airport.longRange, airport.centerLoc[1] - airport.latRange, airport.centerLoc[1] + airport.latRange)
+    _, ax = plt.subplots(figsize=(16, 9))
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+
+    plotter = tmb.Plotter(extent, t, width=1200)
+    plotter.plot(ax, t)
+
+    normalizedPercent = (exitPercent - np.min(exitPercent)) / (np.max(exitPercent) - np.min(exitPercent))
+
+    allX = []
+    allY = []
+    for ex in airport.exitLocations:
+        long = np.average((ex[0], ex[1]))
+        lat = np.average((ex[2], ex[3]))
+
+        x, y = tmb.project(*(long, lat))
+        allX.append(x)
+        allY.append(y)
+
+    if departures:
+        key1 = "departures"
+        key2 = "Exit"
+    else:
+        key1 = "arrivals"
+        key2 = "Entrance"
+
+    plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
+    plt.scatter(x=allX, y=allY, c=normalizedPercent, cmap="plasma", s=55)
+    plt.colorbar(label=f"{key2} use frequency", orientation="vertical", shrink=0.6)
+
+    if show:
+        plt.show()
+    else:
+        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches='tight')
+
+def plotFrequenciesSize(airport, exitPercent, date, departures=True, show=False):
+    """
+    Plot a heat map (really just some dots representing frequency) on an airport map
+    Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
+    This seemed easier than adjusting the colorbar bounds
+
+    Parameters
+    ----------
+    airport : Airport class
+        airport being studied for this case
+    exitPercent : list
+        Percentages of aircraft using each exit
+    dateString : string
+        date this data is from
+    departures : bool, optional
+        whether this data is from departing aircraft, used for titles, by default True
+    show : bool, optional
+        whether to show the plot, by default False, then it saves the figure
+    """
+    extent = tmb.Extent.from_lonlat(airport.centerLoc[0] - airport.longRange, airport.centerLoc[0] + airport.longRange, airport.centerLoc[1] - airport.latRange, airport.centerLoc[1] + airport.latRange)
+    _, ax = plt.subplots(figsize=(16, 9))
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+
+    plotter = tmb.Plotter(extent, t, width=1200)
+    plotter.plot(ax, t)
+
+    normalizedPercent = (exitPercent - np.min(exitPercent)) / (np.max(exitPercent) - np.min(exitPercent))
+
+    for i, ex in enumerate(airport.exitLocations):
+        long = np.average((ex[0], ex[1]))
+        lat = np.average((ex[2], ex[3]))
+
+        x, y = tmb.project(*(long, lat))
+        ax.plot(x, y, marker="o", markersize=10*int(normalizedPercent[i] + 1), color="c", alpha=0.7)
+
+    if departures:
+        key1 = "departures"
+        key2 = "Exit"
+    else:
+        key1 = "arrivals"
+        key2 = "Entrance"
+
+    plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
+
+    if show:
+        plt.show()
+    else:
+        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches='tight')
+
+
+def plotAllInFolder(path, airport):
+    """
+    plot all the flight files at a path to debug
+
+    Parameters
+    ----------
+    path : string
+        path to folder of files
+    airport : Airport class
+        airport being studied for this case
+    """
+    departureFiles = [f for f in listdir(path) if isfile(join(path, f))]
+
+    for fileName in departureFiles:
+        fullName = join(path, fileName)
+
+        flightDetails = openPickle(fullName)
+        plotMap(flightDetails, airport, show=True)
