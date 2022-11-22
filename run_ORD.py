@@ -14,17 +14,19 @@ plt.ioff()
 cur_dir = os.path.abspath(os.path.dirname(__file__))
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "temp")
+out_folder = os.path.join(cur_dir, "ORD_28L22L_1000w")
 use_snopt = False
 airport = "ORD_28L22L"  # set to None to do other problem
-resolution = "250w"
+resolution = "1000w"
 min_density = 1e-3  # lower bound on density
 
 set_temp = 200.0
 q_elem = 6e6
 max_temps = {
-    "dumb": 500,
+    "dumb": 700,
 }
+
+only_postprocess_video = False  # skip runnign the problem and just make the video for the current setup
 
 apt_data = load_airport(airport, resolution, min_density=min_density)
 
@@ -41,79 +43,80 @@ for case_name in cases:
 # ========== Initial condition options ==========
 init = "taxiways"  # can be "uniform", "taxiways", or "circle"
 
-prob = om.Problem()
-simp = prob.model.add_subsystem(
-    "simp",
-    SIMP(
-        num_x=nx,
-        num_y=ny,
-        x_lim=xlim,
-        y_lim=ylim,
-        T_set=apt_data["T_set_node"],
-        q=apt_data["q_elem"],
-        keep_out=apt_data["keep_out"],
-        plot=None if use_snopt else [out_folder, 5],
-        clim={case_name: [set_temp, max_temps[case_name]] for case_name in cases},
-        airport_data=apt_data,
-        r=2e-3,
-        p=3.0,
-        ks_rho=10.0,
-        use_smoothstep=False,
-    ),
-    promotes=["*"],
-)
+if not only_postprocess_video:
+    prob = om.Problem()
+    simp = prob.model.add_subsystem(
+        "simp",
+        SIMP(
+            num_x=nx,
+            num_y=ny,
+            x_lim=xlim,
+            y_lim=ylim,
+            T_set=apt_data["T_set_node"],
+            q=apt_data["q_elem"],
+            keep_out=apt_data["keep_out"],
+            plot=None if use_snopt else [out_folder, 5],
+            clim={case_name: [set_temp, max_temps[case_name]] for case_name in cases},
+            airport_data=apt_data,
+            r=2e-3,
+            p=3.0,
+            ks_rho=10.0,
+            use_smoothstep=False,
+        ),
+        promotes=["*"],
+    )
 
-prob.model.add_objective("mass")
-prob.model.add_design_var("density_dv", lower=apt_data["density_lower"], upper=apt_data["density_upper"])
-for case_name in cases:
-    prob.model.add_constraint(f"max_temp_{case_name}", upper=max_temps[case_name])
+    prob.model.add_objective("mass")
+    prob.model.add_design_var("density_dv", lower=apt_data["density_lower"], upper=apt_data["density_upper"])
+    for case_name in cases:
+        prob.model.add_constraint(f"max_temp_{case_name}", upper=max_temps[case_name])
 
-os.makedirs(out_folder, exist_ok=True)
+    os.makedirs(out_folder, exist_ok=True)
 
-prob.driver = om.pyOptSparseDriver(optimizer="IPOPT")
-prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
-prob.driver.opt_settings["output_file"] = os.path.join(out_folder, "IPOPT.out")
-prob.driver.opt_settings["max_iter"] = 5000
-prob.driver.opt_settings["constr_viol_tol"] = 1e-6
-prob.driver.opt_settings["nlp_scaling_method"] = "gradient-based"
-prob.driver.opt_settings["acceptable_tol"] = 1e-5
-prob.driver.opt_settings["acceptable_iter"] = 0
-prob.driver.opt_settings["tol"] = 1e-5
-prob.driver.opt_settings["mu_strategy"] = "adaptive"
-prob.driver.opt_settings["corrector_type"] = "affine"
-prob.driver.opt_settings["limited_memory_max_history"] = 100
-prob.driver.opt_settings["corrector_type"] = "primal-dual"
-prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
-prob.driver.opt_settings["linear_solver"] = "ma86"
+    prob.driver = om.pyOptSparseDriver(optimizer="IPOPT")
+    prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
+    prob.driver.opt_settings["output_file"] = os.path.join(out_folder, "IPOPT.out")
+    prob.driver.opt_settings["max_iter"] = 5000
+    prob.driver.opt_settings["constr_viol_tol"] = 1e-6
+    prob.driver.opt_settings["nlp_scaling_method"] = "gradient-based"
+    prob.driver.opt_settings["acceptable_tol"] = 1e-5
+    prob.driver.opt_settings["acceptable_iter"] = 0
+    prob.driver.opt_settings["tol"] = 1e-5
+    prob.driver.opt_settings["mu_strategy"] = "adaptive"
+    prob.driver.opt_settings["corrector_type"] = "affine"
+    prob.driver.opt_settings["limited_memory_max_history"] = 100
+    prob.driver.opt_settings["corrector_type"] = "primal-dual"
+    prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
+    prob.driver.opt_settings["linear_solver"] = "ma86"
 
-prob.setup(mode="rev")
+    prob.setup(mode="rev")
 
-mesh_x, mesh_y = simp.get_mesh()
+    mesh_x, mesh_y = simp.get_mesh()
 
-# Set the initial condition
-if init == "circle":
-    x_mid = (xlim[0] + xlim[1]) / 2
-    y_mid = (ylim[0] + ylim[1]) / 2
-    r_circ = min(xlim[1] - xlim[0], ylim[1] - ylim[0]) / 2
+    # Set the initial condition
+    if init == "circle":
+        x_mid = (xlim[0] + xlim[1]) / 2
+        y_mid = (ylim[0] + ylim[1]) / 2
+        r_circ = min(xlim[1] - xlim[0], ylim[1] - ylim[0]) / 2
 
-    x_centroid = mesh_x[:-1, :-1] + mesh_x[1, 1] / 2
-    y_centroid = mesh_y[:-1, :-1] + mesh_y[1, 1] / 2
-    dens_init = ((x_centroid - x_mid)**2 + (y_centroid - y_mid)**2) < r_circ**2
-    dens_init = dens_init.astype(float)
-    dens_init[dens_init < min_density] = min_density
-elif init == "uniform":
-    dens_init = np.ones(n_elem, dtype=float)
-elif init == "taxiways":
-    dens_init = apt_data["runways"].flatten()
-    dens_init += apt_data["taxiways"].flatten()
-    dens_init[dens_init < min_density] = min_density
-    dens_init[dens_init > 1.0] = 1.0
-else:
-    raise ValueError(f"Initial condition \"{init}\" unknown, must be \"uniform\", \"taxiways\", or \"circle\"")
-prob.set_val("density_dv", dens_init)
+        x_centroid = mesh_x[:-1, :-1] + mesh_x[1, 1] / 2
+        y_centroid = mesh_y[:-1, :-1] + mesh_y[1, 1] / 2
+        dens_init = ((x_centroid - x_mid)**2 + (y_centroid - y_mid)**2) < r_circ**2
+        dens_init = dens_init.astype(float)
+        dens_init[dens_init < min_density] = min_density
+    elif init == "uniform":
+        dens_init = np.ones(n_elem, dtype=float)
+    elif init == "taxiways":
+        dens_init = apt_data["runways"].flatten()
+        dens_init += apt_data["taxiways"].flatten()
+        dens_init[dens_init < min_density] = min_density
+        dens_init[dens_init > 1.0] = 1.0
+    else:
+        raise ValueError(f"Initial condition \"{init}\" unknown, must be \"uniform\", \"taxiways\", or \"circle\"")
+    prob.set_val("density_dv", dens_init)
 
-# prob.run_model()
-prob.run_driver()
+    # prob.run_model()
+    prob.run_driver()
 
 # Create video
 for case_name in cases:
