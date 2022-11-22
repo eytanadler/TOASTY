@@ -48,13 +48,13 @@ def callback_plot(x, fname=None):
 
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "ORD_1000w")
+out_folder = os.path.join(cur_dir, "temp")
 use_snopt = False
-airport = "ORD"  # set to None to do other problem
-resolution = "1000w"
+airport = "ORD_28L22L"  # set to None to do other problem
+resolution = "250w"
 min_density = 1e-3  # lower bound on density
 
-apt_data = load_airport(airport, resolution)
+apt_data = load_airport(airport, resolution, min_density=min_density)
 
 cases = apt_data["q_elem"].keys()
 nx, ny, xlim, ylim = (apt_data["num_x"], apt_data["num_y"], apt_data["x_lim"], apt_data["y_lim"])
@@ -74,6 +74,9 @@ density_lower[density_lower < min_density] = min_density
 density_upper = 1 - apt_data["buildings"].flatten()
 density_upper[density_upper < min_density] = min_density
 
+# ========== Initial condition options ==========
+init = "taxiways"  # can be "uniform", "taxiways", or "circle"
+
 prob = om.Problem()
 simp = prob.model.add_subsystem(
     "simp",
@@ -84,6 +87,7 @@ simp = prob.model.add_subsystem(
         y_lim=ylim,
         T_set=apt_data["T_set_node"],
         q=apt_data["q_elem"],
+        keep_out=apt_data["keep_out"],
         plot=None if use_snopt else [out_folder, 5],
         airport_data=apt_data,
         r=2e-3,
@@ -95,8 +99,8 @@ simp = prob.model.add_subsystem(
 )
 
 prob.model.add_objective("mass")
-prob.model.add_design_var("density_dv", lower=density_lower, upper=density_upper)
-prob.model.add_constraint("max_temp_dumb", upper=375)
+prob.model.add_design_var("density_dv", lower=apt_data["density_lower"], upper=apt_data["density_upper"])
+prob.model.add_constraint("max_temp_dumb", upper=500)
 
 os.makedirs(out_folder, exist_ok=True)
 
@@ -138,17 +142,27 @@ prob.setup(mode="rev")
 
 mesh_x, mesh_y = simp.get_mesh()
 
-# # Start with a circle for the meme
-# x_mid = (xlim[0] + xlim[1]) / 2
-# y_mid = (ylim[0] + ylim[1]) / 2
-# r_circ = min(xlim[1] - xlim[0], ylim[1] - ylim[0]) / 2
+# Set the initial condition
+if init == "circle":
+    x_mid = (xlim[0] + xlim[1]) / 2
+    y_mid = (ylim[0] + ylim[1]) / 2
+    r_circ = min(xlim[1] - xlim[0], ylim[1] - ylim[0]) / 2
 
-# x_centroid = mesh_x[:-1, :-1] + mesh_x[1, 1] / 2
-# y_centroid = mesh_y[:-1, :-1] + mesh_y[1, 1] / 2
-# dens_circ = ((x_centroid - x_mid)**2 + (y_centroid - y_mid)**2) < r_circ**2
-# dens_circ = dens_circ.astype(float)
-# dens_circ[dens_circ < min_density] = min_density
-# prob.set_val("density_dv", dens_circ.flatten())
+    x_centroid = mesh_x[:-1, :-1] + mesh_x[1, 1] / 2
+    y_centroid = mesh_y[:-1, :-1] + mesh_y[1, 1] / 2
+    dens_init = ((x_centroid - x_mid)**2 + (y_centroid - y_mid)**2) < r_circ**2
+    dens_init = dens_init.astype(float)
+    dens_init[dens_init < min_density] = min_density
+elif init == "uniform":
+    dens_init = np.ones(n_elem, dtype=float)
+elif init == "taxiways":
+    dens_init = apt_data["runways"].flatten()
+    dens_init += apt_data["taxiways"].flatten()
+    dens_init[dens_init < min_density] = min_density
+    dens_init[dens_init > 1.0] = 1.0
+else:
+    raise ValueError(f"Initial condition \"{init}\" unknown, must be \"uniform\", \"taxiways\", or \"circle\"")
+prob.set_val("density_dv", dens_init)
 
 # prob.run_model()
 prob.run_driver()

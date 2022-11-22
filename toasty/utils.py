@@ -345,3 +345,111 @@ class AvgTemp(om.ExplicitComponent):
 
         jacobian["avg_temp", "temp"] *= 0
         jacobian["avg_temp", "temp"] += np.repeat(inputs["density"], 4) / 4
+
+
+class MaskKeepOut(om.ExplicitComponent):
+    """
+    Mask the nodal temperatures in the keep out zones.
+    The temperature at any node that is fully surrounded by keep out elements is
+    set to zero. Any node that has an adjacent non-keep out element is left as is.
+
+    Inputs
+    ------
+    temp : float
+        Nodal temperatures, flattened into a 1D array.
+
+    Outputs
+    -------
+    masked_temp : float
+        Temperatures fully surrounded by keep out elements are set to
+        zero, otherwise they are left as they are.
+
+    Options
+    -------
+    num_x : int
+        Number of mesh coordinates in the x direction.
+    num_y : int
+        Number of mesh coordinates in the y direction.
+    keep_out : numpy array (num x-coord - 1 x num y-coord - 1)
+        One where the keep out zones are and zero where the optimizer can modify. This will limit the
+        maximum temperature constraint to consider only the regions the optimizer can affect. If there
+        are keep out zones, make sure to specify this!
+    """
+
+    def initialize(self):
+        self.options.declare("num_x", types=int, desc="Number of mesh coordinates in the x direction")
+        self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
+        self.options.declare("keep_out", types=(np.ndarray), default=None, desc="Keep out zones for the optimizer")
+
+    def setup(self):
+        nx, ny = (self.options["num_x"], self.options["num_y"])
+        n_elem = (nx - 1) * (ny - 1)
+        keep_out = np.zeros(n_elem) if self.options["keep_out"] is None else self.options["keep_out"].flatten()
+
+        # Set up the mask that will multiply temperatures
+        # If all of the neighboring elements are keep out elements, this is zero, otherwise one
+        self.mask = np.ones(nx * ny, dtype=float)
+
+        # Indices of corners of each element
+        i, j = np.meshgrid(np.arange(nx - 1), np.arange(ny - 1), indexing="ij")
+        i = i.flatten()
+        j = j.flatten()
+        node_idx = np.array([i * ny + j, i * ny + j + 1, (i + 1) * ny + j, (i + 1) * ny + j + 1])
+
+        for corner_idx in node_idx:
+            self.mask[corner_idx] *= keep_out
+
+        # Now all the nodes entirely surrounded by keep out elements are 1 and otherwise 0, should be reversed
+        self.mask = 1 - self.mask
+
+        self.add_input("temp", shape=(nx * ny,))
+        self.add_output("masked_temp", shape=(nx * ny,))
+
+        arng = np.arange(nx * ny)
+        self.declare_partials("masked_temp", "temp", rows=arng, cols=arng, val=self.mask)
+
+    def compute(self, inputs, outputs):
+        outputs["masked_temp"] = inputs["temp"] * self.mask
+
+
+class Multiply(om.ExplicitComponent):
+    """
+    Element-wise multiply two vectors together: A * B = product
+
+    Inputs
+    ------
+    A : float
+        First thingy.
+    B : float
+        Second thingy.
+    
+    Outputs
+    -------
+    product : float
+        Element-wise multiplication of first and second thingies.
+    
+    Options
+    -------
+    vec_size : int
+        Size of the A and B matrices (and thus product).
+    """
+
+    def initialize(self):
+        self.options.declare("vec_size", types=int, desc="Size of input and output vectors")
+
+    def setup(self):
+        n = self.options["vec_size"]
+
+        self.add_input("A", shape=(n,))
+        self.add_input("B", shape=(n,))
+        self.add_output("product", shape=(n,))
+
+        arng = np.arange(n)
+        self.declare_partials("product", ["A", "B"], rows=arng, cols=arng)
+
+    def computes(self, inputs, outputs):
+        outputs["product"] = inputs["A"] * inputs["B"]
+    
+    def compute_partials(self, inputs, J):
+        J["product", "A"] = inputs["B"]
+        J["product", "B"] = inputs["A"]
