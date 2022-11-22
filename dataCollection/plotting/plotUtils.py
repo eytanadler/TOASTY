@@ -18,11 +18,15 @@ def extractTrail(flightDetails):
     """
     trail = flightDetails["trail"]
     latlong = np.zeros((len(trail), 2))
+    alt = np.zeros(len(trail))
+    speed = np.zeros(len(trail))
 
     for i, point in enumerate(trail):
         latlong[i, :] = [point["lng"], point["lat"]]
+        alt[i] = point["alt"]
+        speed[i] = point["spd"]
 
-    return latlong
+    return latlong, alt, speed
 
 
 def openPickle(fileName):

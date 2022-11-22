@@ -222,8 +222,8 @@ def catchArrivals(airport, openTime, outFolder, refreshRate=60):
                         # flight has to be at detination airport
                         if flightAtAirport(airport, flight):
                             # check if aircraft has gone through an exit yet - this returns None if it hasn't
-                            trail = extractTrail(fr_api.get_flight_details(flight.id))
-                            exitCode = airport.findExitForTrail(trail)
+                            flightDetails = fr_api.get_flight_details(flight.id)
+                            exitCode = airport.findBetterExit(flightDetails, isDeparture=False)
                             print(f"flight {flight.number} exited at {exitCode}")
 
                             # flight has to be off the runway or we'll wait to get it next time
