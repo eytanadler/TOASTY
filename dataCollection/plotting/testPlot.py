@@ -1,7 +1,15 @@
 from os.path import join, dirname
 from dataCollection.airports.SanDiego import SanDiego
 from dataCollection.airports.Chicago import Chicago
-from dataCollection.plotting.makeItPretty import plotAllInFolder, openPickle, plotMap, plotExitBoxes, plotFrequenciesColor, plotFrequenciesSize
+from dataCollection.plotting.makeItPretty import (
+    plotAllInFolder,
+    openPickle,
+    plotMap,
+    plotExitBoxes,
+    plotFrequenciesColor,
+    plotFrequenciesSize,
+    extractTrail,
+)
 
 # departurePath = join(dirname(__file__), "../actualData/departures")
 # airport = SanDiego()
@@ -52,7 +60,19 @@ from dataCollection.plotting.makeItPretty import plotAllInFolder, openPickle, pl
 
 # # plotMap(flightDetails, airport, True)
 
-# plotAllInFolder(departurePath, airport)
 
 airport = Chicago()
-plotExitBoxes(airport, plotAll=True, exitList=None, show=False)
+# path = join(dirname(__file__), "../actualData/11_21_new_new/")
+# arrivalPath = join(path, "arrivals")
+# plotAllInFolder(arrivalPath, airport, False, plotExit=True)
+# # print(extractTrail(flightDetails))
+# # plotMap(flightDetails, airport, True)
+
+# # plotExitBoxes(airport, plotAll=True, exitList=None, show=False)
+
+file = "BR633_ORD_to_TPE"
+path = join(dirname(__file__), "../actualData/11_21_new_new_new/")
+arrivalPath = join(path, "departures")
+filePath = join(arrivalPath, file)
+flightDetails = openPickle(filePath)
+plotMap(flightDetails, airport, departure=False, plotExit=True, show=True)

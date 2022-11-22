@@ -9,10 +9,11 @@ from dataCollection.plotting.plotUtils import extractTrail, openPickle, flightID
 
 
 tmb.init(create=True)
-t = tmb.tiles.build_OSM()
+
+t = tmb.tiles.build_OSM_Humanitarian()
 
 
-def plotMap(flightDetails, airport, show=False):
+def plotMap(flightDetails, airport, departure, plotExit=False, show=False):
     """
     Plot the longitude and latitude for a flight on a map of a given airport
 
@@ -27,7 +28,7 @@ def plotMap(flightDetails, airport, show=False):
     """
     nice.setRCParams()
     flightID = flightIDString(flightDetails)
-    latlong = extractTrail(flightDetails)
+    latlong, _, _ = extractTrail(flightDetails)
 
     extent = tmb.Extent.from_lonlat(
         airport.centerLoc[0] - airport.longRange,
@@ -45,6 +46,19 @@ def plotMap(flightDetails, airport, show=False):
     for point in latlong:
         x, y = tmb.project(*point)
         ax.scatter(x, y, color="black", s=40)
+
+    if plotExit:
+        ex = airport.findBetterExit(flightDetails, departure)
+        coords = airport.exitLocations[ex][:]
+        x1, y1 = tmb.project(*(coords[0], coords[3]))
+        x2, y2 = tmb.project(*(coords[1], coords[3]))
+        x3, y3 = tmb.project(*(coords[1], coords[2]))
+        x4, y4 = tmb.project(*(coords[0], coords[2]))
+
+        x = [x1, x2, x3, x4, x1]
+        y = [y1, y2, y3, y4, y1]
+
+        ax.plot(x, y, color="black")
 
     plt.title(flightID, fontsize=30)
 
@@ -67,7 +81,12 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
     show : bool, optional
         whether to show the plot, by default False, then it saves the figure
     """
-    extent = tmb.Extent.from_lonlat(airport.centerLoc[0] - airport.longRange, airport.centerLoc[0] + airport.longRange, airport.centerLoc[1] - airport.latRange, airport.centerLoc[1] + airport.latRange)
+    extent = tmb.Extent.from_lonlat(
+        airport.centerLoc[0] - airport.longRange,
+        airport.centerLoc[0] + airport.longRange,
+        airport.centerLoc[1] - airport.latRange,
+        airport.centerLoc[1] + airport.latRange,
+    )
     _, ax = plt.subplots()
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
@@ -88,7 +107,7 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
 
             ax.plot(x, y, color="black")
 
-    if plotAll is True:     # duplicated code is the root of all eveil but I am TIRED TODO
+    if plotAll is True:  # duplicated code is the root of all eveil but I am TIRED TODO
         for i in range(len(airport.exitLocations)):
             coords = airport.exitLocations[i][:]
             x1, y1 = tmb.project(*(coords[0], coords[3]))
@@ -106,7 +125,7 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
     if show:
         plt.show()
     else:
-        plt.savefig(f"figures/bounds_{airport.code}.png", dpi=600, bbox_inches='tight')
+        plt.savefig(f"figures/bounds_{airport.code}.png", dpi=600, bbox_inches="tight")
 
 
 def plotFrequenciesColor(airport, exitPercent, date, departures=True, show=False):
@@ -128,7 +147,12 @@ def plotFrequenciesColor(airport, exitPercent, date, departures=True, show=False
     show : bool, optional
         whether to show the plot, by default False, then it saves the figure
     """
-    extent = tmb.Extent.from_lonlat(airport.centerLoc[0] - airport.longRange, airport.centerLoc[0] + airport.longRange, airport.centerLoc[1] - airport.latRange, airport.centerLoc[1] + airport.latRange)
+    extent = tmb.Extent.from_lonlat(
+        airport.centerLoc[0] - airport.longRange,
+        airport.centerLoc[0] + airport.longRange,
+        airport.centerLoc[1] - airport.latRange,
+        airport.centerLoc[1] + airport.latRange,
+    )
     _, ax = plt.subplots(figsize=(16, 9))
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
@@ -162,9 +186,10 @@ def plotFrequenciesColor(airport, exitPercent, date, departures=True, show=False
     if show:
         plt.show()
     else:
-        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches='tight')
+        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches="tight")
 
-def plotFrequenciesSize(airport, exitPercent, date, departures=True, show=False):
+
+def plotFrequenciesSize(airport, exitPercent, exitCount, date, departures=True, show=False):
     """
     Plot a heat map (really just some dots representing frequency) on an airport map
     Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
@@ -183,39 +208,55 @@ def plotFrequenciesSize(airport, exitPercent, date, departures=True, show=False)
     show : bool, optional
         whether to show the plot, by default False, then it saves the figure
     """
-    extent = tmb.Extent.from_lonlat(airport.centerLoc[0] - airport.longRange, airport.centerLoc[0] + airport.longRange, airport.centerLoc[1] - airport.latRange, airport.centerLoc[1] + airport.latRange)
+    extent = tmb.Extent.from_lonlat(
+        airport.centerLoc[0] - airport.longRange,
+        airport.centerLoc[0] + airport.longRange,
+        airport.centerLoc[1] - airport.latRange,
+        airport.centerLoc[1] + airport.latRange,
+    )
     _, ax = plt.subplots(figsize=(16, 9))
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
 
-    plotter = tmb.Plotter(extent, t, width=1200)
+    plotter = tmb.Plotter(extent, tile_provider=t, width=1200)
     plotter.plot(ax, t)
 
-    normalizedPercent = (exitPercent - np.min(exitPercent)) / (np.max(exitPercent) - np.min(exitPercent))
+    # normalizedPercent = (exitPercent - np.min(exitPercent)) / (np.max(exitPercent) - np.min(exitPercent))
 
     for i, ex in enumerate(airport.exitLocations):
         long = np.average((ex[0], ex[1]))
         lat = np.average((ex[2], ex[3]))
 
         x, y = tmb.project(*(long, lat))
-        ax.plot(x, y, marker="o", markersize=10*int(normalizedPercent[i] + 1), color="c", alpha=0.7)
+        # ax.plot(x, y, marker="o", markersize=1, color="black")
+
+        if exitPercent[i] == 0:
+            size = 0
+        else:
+            size = 40 * np.log(exitPercent[i]) / np.log(100)
+
+        ax.plot(x, y, marker="o", markersize=size, color="lightcoral", alpha=0.7)
+        plt.text(x, y, str(i), fontsize=4, ha="center", va="center")
+        # print(f"i {i} size {10 * int(normalizedPercent[i])}")
+        # ax.plot(x, y, marker="o", markersize=30, color="lightcoral", alpha=0.7)
 
     if departures:
         key1 = "departures"
-        key2 = "Exit"
+        key2 = "Entrance"
     else:
         key1 = "arrivals"
-        key2 = "Entrance"
+        key2 = "Exit"
 
     plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
 
     if show:
         plt.show()
     else:
-        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches='tight')
+        # plt.savefig("test.png", dpi=600, bbox_inches="tight")
+        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches="tight")
 
 
-def plotAllInFolder(path, airport):
+def plotAllInFolder(path, airport, departures, plotExit=False):
     """
     plot all the flight files at a path to debug
 
@@ -232,4 +273,4 @@ def plotAllInFolder(path, airport):
         fullName = join(path, fileName)
 
         flightDetails = openPickle(fullName)
-        plotMap(flightDetails, airport, show=True)
+        plotMap(flightDetails, airport, departures, plotExit=plotExit, show=True)
