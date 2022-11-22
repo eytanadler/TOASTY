@@ -48,13 +48,13 @@ def callback_plot(x, fname=None):
 
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "ORD_1000w_init_taxi")
+out_folder = os.path.join(cur_dir, "temp")
 use_snopt = False
-airport = "ORD"  # set to None to do other problem
-resolution = "1000w"
+airport = "ORD_28L22L"  # set to None to do other problem
+resolution = "250w"
 min_density = 1e-3  # lower bound on density
 
-apt_data = load_airport(airport, resolution)
+apt_data = load_airport(airport, resolution, min_density=min_density)
 
 cases = apt_data["q_elem"].keys()
 nx, ny, xlim, ylim = (apt_data["num_x"], apt_data["num_y"], apt_data["x_lim"], apt_data["y_lim"])
@@ -87,6 +87,7 @@ simp = prob.model.add_subsystem(
         y_lim=ylim,
         T_set=apt_data["T_set_node"],
         q=apt_data["q_elem"],
+        keep_out=apt_data["keep_out"],
         plot=None if use_snopt else [out_folder, 5],
         airport_data=apt_data,
         r=2e-3,
@@ -98,8 +99,8 @@ simp = prob.model.add_subsystem(
 )
 
 prob.model.add_objective("mass")
-prob.model.add_design_var("density_dv", lower=density_lower, upper=density_upper)
-prob.model.add_constraint("max_temp_dumb", upper=375)
+prob.model.add_design_var("density_dv", lower=apt_data["density_lower"], upper=apt_data["density_upper"])
+prob.model.add_constraint("max_temp_dumb", upper=500)
 
 os.makedirs(out_folder, exist_ok=True)
 
