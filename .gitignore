@@ -4,14 +4,4 @@
 *.egg-info/
 __pycache__/
 .DS_Store
-11-6 10 am departures/
-11-6 10am debug/
-11_6_4pm_departures/
-11_6_9pm_arrivals/
-11_6_night_arrivals_maybe/
-11_6_night_departures/
-11_6_something_debug/
-11_6night_arrivals/
-11_7_night/
-night_debug/
 results/

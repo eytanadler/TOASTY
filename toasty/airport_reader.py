@@ -121,7 +121,7 @@ def load_airport(airport_name, resolution, min_density=1e-3):
         (im["keep_out"][:, :, 0] > (2 * im["keep_out"][:, :, 1]))
         & (im["keep_out"][:, :, 0] > (2 * im["keep_out"][:, :, 2]))
     )
-    keep_out[[0, 1], -1] = False  # not sure why but these squares sometimes end up red in the images
+    keep_out[[0, 1], -1] = True  # not sure why but these squares sometimes end up red in the images
     data["keep_out"] = keep_out.astype(float)
 
     # Get the heat-generating elements for each approach from the elements

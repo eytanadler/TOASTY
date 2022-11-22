@@ -2,10 +2,26 @@ import numpy as np
 from tabulate import tabulate
 from os import listdir
 from os.path import isfile, join, dirname
-from dataCollection.plotting.makeItPretty import openPickle, extractTrail, plotMap
+from dataCollection.plotting.makeItPretty import (
+    openPickle,
+    extractTrail,
+    plotMap,
+    plotFrequenciesColor,
+    plotFrequenciesSize,
+)
 
 
-def countTotals(folderPath, airport, debug=False):
+def countTotals(
+    folderPath,
+    airport,
+    departures=True,
+    plotColor=False,
+    plotSize=False,
+    showPlot=False,
+    plotString=None,
+    printTable=False,
+    debug=False,
+):
     """
     _summary_
 
@@ -26,15 +42,14 @@ def countTotals(folderPath, airport, debug=False):
     fullPath = join(dirname(__file__), folderPath)
     departureFiles = [f for f in listdir(fullPath) if isfile(join(fullPath, f))]
     exitCount = np.zeros(airport.nExits + 1)
+    exitPercent = np.zeros(airport.nExits + 1)
 
     for file in departureFiles:
         fullName = join(fullPath, file)
         flightDetails = openPickle(fullName)
 
         if flightDetails is not None:
-            trail = extractTrail(flightDetails)
-
-            exitCode = airport.findExitForTrail(trail)
+            exitCode = airport.findBetterExit(flightDetails, isDeparture=departures)
 
             if debug:
                 if exitCode is None:
@@ -46,10 +61,27 @@ def countTotals(folderPath, airport, debug=False):
             else:
                 exitCount[-1] += 1
 
-    return exitCount
+    totalMovements = np.sum(exitCount)
+    for i in range(airport.nExits + 1):
+        exitPercent[i] = exitCount[i] / totalMovements * 100
+
+    if plotColor:
+        plotFrequenciesColor(
+            airport, exitPercent[0 : airport.nExits], exitCount[0 : airport.nExits], plotString, departures, showPlot
+        )
+
+    if plotSize:
+        plotFrequenciesSize(
+            airport, exitPercent[0 : airport.nExits], exitCount[0 : airport.nExits], plotString, departures, showPlot
+        )
+
+    if printTable:
+        tabulateExits(departures, airport, exitCount, exitPercent)
+
+    return exitCount, exitPercent
 
 
-def tabulateExits(category, airport, exitCount):
+def tabulateExits(departures, airport, exitCount, exitPercent):
     """
     _summary_
 
@@ -62,18 +94,19 @@ def tabulateExits(category, airport, exitCount):
     exitCount : _type_
         _description_
     """
-    totalMovements = np.sum(exitCount)
     table = []
+
+    if departures:
+        category = "Departures"
+    else:
+        category = "Arrivals"
 
     print(f"{category} totals for {airport.code}:")
 
     for i in range(airport.nExits):
-        ex = exitCount[i]
-        percentOfMove = ex / totalMovements * 100
+        table.append([f"{i+1}", exitCount[i], exitPercent[i]])
 
-        table.append([f"{i+1}", ex, percentOfMove])
-
-    table.append(["Error", exitCount[-1], exitCount[-1] / totalMovements * 100])
+    table.append(["Error", exitCount[-1], exitPercent[-1]])
 
     headers = ["Exit", "Flights using exit", "As % total"]
     print(tabulate(table, headers, floatfmt=(".0f", ".0f", ".2f")))

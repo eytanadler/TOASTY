@@ -62,6 +62,10 @@ class SIMP(om.Group):
         List with the output folder and frequency at which to plot, for example ["~/Documents/plot", 10],
         by default will not plot. Make sure the directory is absolute, not relative! In the multipoint
         case, subdirectories are made for each multipoint case.
+    clim : list, tuple, or dict
+        Iterable with the lower and upper bounds for the colorbar when plotting. In the multipoint case,
+        this can be a dictionary where the keys are the case names and the values are the list/tuple
+        with the colorbar limits.
     airport_data : dict
         If plot is set to something, pass in the dictionary returned by load_airport
         to plot airport buildings and the runways.
@@ -89,6 +93,7 @@ class SIMP(om.Group):
         self.options.declare("keep_out", types=(np.ndarray), default=None, desc="Keep out zones for the optimizer")
         self.options.declare("conductivity", default=1e3, types=float, desc="Material thermal conductivity")
         self.options.declare("plot", default=None, desc="List with the output folder and frequency at which to plot")
+        self.options.declare("clim", types=(list, tuple, dict), default=None, desc="Limits for colorbar when plotting")
         self.options.declare("airport_data", default=None, desc="Airport data to make the plot cool")
         self.options.declare("r", default=1e-2, types=float, desc="Filter radius")
         self.options.declare("p", default=3.0, types=float, desc="Penalty factor")
@@ -145,6 +150,12 @@ class SIMP(om.Group):
                 if plot_option is not None:
                     plot_option[0] = os.path.join(plot_option[0], case_name)
 
+                # Colorbar limits
+                if isinstance(self.options["clim"], dict):
+                    clim = self.options["clim"][case_name]
+                else:
+                    clim = self.options["clim"]
+
                 self.fem.append(self.add_subsystem(
                     f"fem_{case_name}",
                     FEM(
@@ -156,6 +167,7 @@ class SIMP(om.Group):
                         q=self.options["q"][case_name],
                         conductivity=self.options["conductivity"],
                         plot=plot_option,
+                        clim=clim,
                         airport_data=self.options["airport_data"],
                     ),
                     promotes_outputs=[("temp", f"temp_{case_name}")]
@@ -176,6 +188,13 @@ class SIMP(om.Group):
                 self.connect("penalize.density_penalized", f"fem_{case_name}.density")
                 self.connect(f"mask_keep_out_{case_name}.masked_temp", f"calc_max_temp_{case_name}.g")
         else:
+
+            # Colorbar limits
+            if isinstance(self.options["clim"], dict):
+                raise ValueError("\"clim\" option cannot be a dictionary if not doing a multipoint case")
+            else:
+                clim = self.options["clim"]
+
             self.fem = self.add_subsystem(
                 "fem",
                 FEM(
@@ -187,6 +206,7 @@ class SIMP(om.Group):
                     q=self.options["q"],
                     conductivity=self.options["conductivity"],
                     plot=self.options["plot"],
+                    clim=clim,
                     airport_data=self.options["airport_data"],
                 ),
                 promotes_outputs=["temp"]

@@ -29,6 +29,7 @@ setup(
         "openmdao>=3.16",
         "matplotlib",
         "Pillow",
+        "tilemapbase",
     ],
     extras_require={
         "test": ["pytest"],
