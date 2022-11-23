@@ -104,7 +104,7 @@ def tabulateExits(departures, airport, exitCount, exitPercent):
     print(f"{category} totals for {airport.code}:")
 
     for i in range(airport.nExits):
-        table.append([f"{i+1}", exitCount[i], exitPercent[i]])
+        table.append([f"{i}", exitCount[i], exitPercent[i]])
 
     table.append(["Error", exitCount[-1], exitPercent[-1]])
 
