@@ -30,6 +30,7 @@ setup(
         "matplotlib",
         "Pillow",
         "tilemapbase",
+        "FlightRadarAPI @ git+https://github.com/hajdik/FlightRadarAPI.git@get-flight-request",
     ],
     extras_require={
         "test": ["pytest"],
