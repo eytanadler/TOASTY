@@ -125,7 +125,48 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
     if show:
         plt.show()
     else:
-        plt.savefig(f"figures/bounds_{airport.code}.png", dpi=600, bbox_inches="tight")
+        plt.savefig(f"figures/bounds_{airport.code}.pdf", dpi=600, bbox_inches="tight")
+
+
+def plotExitLabels(airport, show=False):
+    """
+    Plot the labels for runway exits on top of the map
+
+    Parameters
+    ----------
+    airport : Airport class
+        airport being studied for this case
+    show : bool, optional
+        whether to show the plot, by default False, then it saves the figure
+    """
+    extent = tmb.Extent.from_lonlat(
+        airport.centerLoc[0] - airport.longRange,
+        airport.centerLoc[0] + airport.longRange,
+        airport.centerLoc[1] - airport.latRange,
+        airport.centerLoc[1] + airport.latRange,
+    )
+    _, ax = plt.subplots(figsize=(16, 9))
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+
+    plotter = tmb.Plotter(extent, t, width=1200)
+    plotter.plot(ax, t)
+
+    for i, ex in enumerate(airport.exitLocations):
+        long = np.average((ex[0], ex[1]))
+        lat = np.average((ex[2], ex[3]))
+
+        x, y = tmb.project(*(long, lat))
+
+        ax.plot(x, y, color="black", linewidth=0.75)
+        plt.text(x, y, str(i), fontsize=5, ha="center", va="center")
+
+    plt.title(f"Taxiway exit/entrance labels for {airport.code}")
+
+    if show:
+        plt.show()
+    else:
+        plt.savefig(f"figures/labels_{airport.code}.pdf", dpi=600, bbox_inches="tight")
 
 
 def plotFrequenciesColor(airport, exitPercent, date, departures=True, show=False):
