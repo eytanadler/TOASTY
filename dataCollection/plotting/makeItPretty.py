@@ -169,7 +169,7 @@ def plotExitLabels(airport, show=False):
         plt.savefig(f"figures/labels_{airport.code}.pdf", dpi=600, bbox_inches="tight")
 
 
-def plotFrequenciesColor(airport, exitPercent, date, departures=True, show=False):
+def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date=None):
     """
     Plot a heat map (really just some dots representing frequency) on an airport map
     Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
@@ -220,17 +220,24 @@ def plotFrequenciesColor(airport, exitPercent, date, departures=True, show=False
         key1 = "arrivals"
         key2 = "Entrance"
 
-    plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
+    if date is not None:
+        plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
+    else:
+        plt.title(f"{key2} frequencies for {airport.code} {key1}")
+
     plt.scatter(x=allX, y=allY, c=normalizedPercent, cmap="plasma", s=55)
     plt.colorbar(label=f"{key2} use frequency", orientation="vertical", shrink=0.6)
 
     if show:
         plt.show()
     else:
-        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches="tight")
+        if date is not None:
+            plt.savefig(f"figures/color_{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches="tight")
+        else:
+            plt.savefig(f"figures/color_{key2}_freq_{airport.code}_{key1}.png", dpi=600, bbox_inches="tight")
 
 
-def plotFrequenciesSize(airport, exitPercent, exitCount, date, departures=True, show=False):
+def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=None):
     """
     Plot a heat map (really just some dots representing frequency) on an airport map
     Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
@@ -262,14 +269,11 @@ def plotFrequenciesSize(airport, exitPercent, exitCount, date, departures=True, 
     plotter = tmb.Plotter(extent, tile_provider=t, width=1200)
     plotter.plot(ax, t)
 
-    # normalizedPercent = (exitPercent - np.min(exitPercent)) / (np.max(exitPercent) - np.min(exitPercent))
-
     for i, ex in enumerate(airport.exitLocations):
         long = np.average((ex[0], ex[1]))
         lat = np.average((ex[2], ex[3]))
 
         x, y = tmb.project(*(long, lat))
-        # ax.plot(x, y, marker="o", markersize=1, color="black")
 
         if exitPercent[i] == 0:
             size = 0
@@ -277,9 +281,8 @@ def plotFrequenciesSize(airport, exitPercent, exitCount, date, departures=True, 
             size = 40 * np.log(exitPercent[i]) / np.log(100)
 
         ax.plot(x, y, marker="o", markersize=size, color="lightcoral", alpha=0.7)
-        plt.text(x, y, str(i), fontsize=4, ha="center", va="center")
-        # print(f"i {i} size {10 * int(normalizedPercent[i])}")
-        # ax.plot(x, y, marker="o", markersize=30, color="lightcoral", alpha=0.7)
+        # plt.text(x, y, str(i), fontsize=4, ha="center", va="center")
+        plt.text(x, y, f"{exitPercent[i]:.1f}", fontsize=4, ha="center", va="center")
 
     if departures:
         key1 = "departures"
@@ -288,13 +291,18 @@ def plotFrequenciesSize(airport, exitPercent, exitCount, date, departures=True, 
         key1 = "arrivals"
         key2 = "Exit"
 
-    plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
+    if date is not None:
+        plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
+    else:
+        plt.title(f"{key2} frequencies for {airport.code} {key1}")
 
     if show:
         plt.show()
     else:
-        # plt.savefig("test.png", dpi=600, bbox_inches="tight")
-        plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches="tight")
+        if date is not None:
+            plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches="tight")
+        else:
+            plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}.png", dpi=600, bbox_inches="tight")
 
 
 def plotAllInFolder(path, airport, departures, plotExit=False):

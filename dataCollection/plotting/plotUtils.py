@@ -47,7 +47,8 @@ def openPickle(fileName):
     flightDetails = pkl.load(flightFile)
     flightFile.close()
 
-    if not isinstance(flightDetails, dict):
+    # check for garbage data being zipped on accident
+    if not isinstance(flightDetails, dict) or len(flightDetails) < 2:
         flightDetails = None
 
     return flightDetails

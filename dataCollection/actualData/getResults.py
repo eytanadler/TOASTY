@@ -1,0 +1,48 @@
+from dataCollection.actualData.countExits import countTotals
+from dataCollection.airports.SanDiego import SanDiego
+from dataCollection.airports.Chicago import Chicago
+
+
+color = False
+size = True
+show = False
+table = True
+debug = False
+
+
+dateList = ["11-22", "11-23", "11-25", "11-27", "11-28"]
+
+
+def getResultsSAN():
+    airport = SanDiego()
+
+    dateList = ["SAN_11_22", "SAN_11_23", "SAN_11_25", "SAN_11_27", "SAN_11_28"]
+    arrivalList = []
+    departureList = []
+
+    for date in dateList:
+        arrivalList.append(f"results/{date}/arrivals")
+        departureList.append(f"results/{date}/departures")
+
+    countTotals(arrivalList, airport, False, color, size, show, table, debug)
+    countTotals(departureList, airport, True, color, size, show, table, debug)
+
+
+def getResultsORD():
+    airport = Chicago()
+
+    dateList = ["ORD_11_22", "ORD_11_23", "ORD_11_25", "ORD_11_27", "ORD_11_28"]
+    arrivalList = []
+    departureList = []
+
+    for date in dateList:
+        arrivalList.append(f"results/{date}/arrivals")
+        departureList.append(f"results/{date}/departures")
+
+    countTotals(arrivalList, airport, False, color, size, show, table, debug)
+    countTotals(departureList, airport, True, color, size, show, table, debug)
+
+
+getResultsSAN()
+print()
+getResultsORD()

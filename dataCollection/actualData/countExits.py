@@ -12,15 +12,15 @@ from dataCollection.plotting.makeItPretty import (
 
 
 def countTotals(
-    folderPath,
+    folderList,
     airport,
     departures=True,
     plotColor=False,
     plotSize=False,
     showPlot=False,
-    plotString=None,
     printTable=False,
     debug=False,
+    date=None,
 ):
     """
     _summary_
@@ -39,49 +39,47 @@ def countTotals(
     _type_
         _description_
     """
-    fullPath = join(dirname(__file__), folderPath)
-    departureFiles = [f for f in listdir(fullPath) if isfile(join(fullPath, f))]
     exitCount = np.zeros(airport.nExits + 1)
     exitPercent = np.zeros(airport.nExits + 1)
 
-    for file in departureFiles:
-        fullName = join(fullPath, file)
-        flightDetails = openPickle(fullName)
+    for folder in folderList:
+        fullPath = join(dirname(__file__), folder)
+        departureFiles = [f for f in listdir(fullPath) if isfile(join(fullPath, f))]
 
-        if flightDetails is not None:
-            exitCode = airport.findBetterExit(flightDetails, isDeparture=departures)
+        for file in departureFiles:
+            fullName = join(fullPath, file)
+            flightDetails = openPickle(fullName)
 
-            if debug:
-                if exitCode is None:
-                    plotMap(flightDetails, airport, show=True)
-                    print("yikes", file)
+            if flightDetails is not None:
+                exitCode = airport.findBetterExit(flightDetails, isDeparture=departures)
 
-            if exitCode is not None:
-                exitCount[exitCode] += 1
-            else:
-                exitCount[-1] += 1
+                if debug:
+                    if exitCode is None:
+                        plotMap(flightDetails, airport, show=True)
+                        print("yikes", file)
+
+                if exitCode is not None:
+                    exitCount[exitCode] += 1
+                else:
+                    exitCount[-1] += 1
 
     totalMovements = np.sum(exitCount)
     for i in range(airport.nExits + 1):
         exitPercent[i] = exitCount[i] / totalMovements * 100
 
     if plotColor:
-        plotFrequenciesColor(
-            airport, exitPercent[0 : airport.nExits], exitCount[0 : airport.nExits], plotString, departures, showPlot
-        )
+        plotFrequenciesColor(airport, exitPercent[0 : airport.nExits], departures, showPlot, date)
 
     if plotSize:
-        plotFrequenciesSize(
-            airport, exitPercent[0 : airport.nExits], exitCount[0 : airport.nExits], plotString, departures, showPlot
-        )
+        plotFrequenciesSize(airport, exitPercent[0 : airport.nExits], departures, showPlot, date)
 
     if printTable:
-        tabulateExits(departures, airport, exitCount, exitPercent)
+        tabulateExits(departures, airport, exitCount, exitPercent, totalMovements)
 
     return exitCount, exitPercent
 
 
-def tabulateExits(departures, airport, exitCount, exitPercent):
+def tabulateExits(departures, airport, exitCount, exitPercent, totalMovements):
     """
     _summary_
 
@@ -110,3 +108,4 @@ def tabulateExits(departures, airport, exitCount, exitPercent):
 
     headers = ["Exit", "Flights using exit", "As % total"]
     print(tabulate(table, headers, floatfmt=(".0f", ".0f", ".2f")))
+    print(f"{int(totalMovements)} flights in total")
