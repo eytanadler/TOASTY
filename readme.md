@@ -9,3 +9,6 @@ If you do not have [pyOptSparse](https://mdolab-pyoptsparse.readthedocs-hosted.c
 For installing `pypardiso`, I've had trouble where I get an error code -3 when it calls Pardiso.
 The solution that worked for me was switching to an older version of OpenMP that was compatible with the version of MKL installed.
 See [here](https://stackoverflow.com/questions/70665142/pypardisoerror-the-pardiso-solver-failed-with-error-code-3-see-pardiso-docum).
+
+Note, using `pypardiso` with multipoint cases on Windows may cause errors.
+If it does, try uninstalling `pypardiso` from the current Python environment so it falls back to the `scipy` solvers.

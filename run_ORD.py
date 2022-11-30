@@ -24,8 +24,8 @@ min_density = 1e-3  # lower bound on density
 set_temp = 200.0
 q_elem = 1e8
 max_temps = {
-    "arrivals": 700,
-    "departures": 400,
+    "arrivals": 600,
+    "departures": 350,
 }
 
 only_postprocess_video = False  # skip runnign the problem and just make the video for the current setup
@@ -93,6 +93,8 @@ if not only_postprocess_video:
     prob.driver.opt_settings["linear_solver"] = "ma86"
 
     prob.setup(mode="rev")
+
+    om.n2(prob, outfile=os.path.join(out_folder, "n2.html"), show_browser=False)
 
     mesh_x, mesh_y = simp.get_mesh()
 
