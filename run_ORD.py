@@ -2,7 +2,7 @@ import openmdao.api as om
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-from toasty import SIMP, load_airport
+from toasty import SIMP, load_airport, debug_plots
 import subprocess
 
 # Do this to have the plotting work with nohup
@@ -14,21 +14,26 @@ plt.ioff()
 cur_dir = os.path.abspath(os.path.dirname(__file__))
 
 # USER INPUTS
-out_folder = os.path.join(cur_dir, "ORD_28L22L_1000w")
+out_folder = os.path.join(cur_dir, "ORD_1000w")
+os.makedirs(out_folder, exist_ok=True)
 use_snopt = False
-airport = "ORD_28L22L"  # set to None to do other problem
+airport = "ORD"  # set to None to do other problem
 resolution = "1000w"
 min_density = 1e-3  # lower bound on density
 
 set_temp = 200.0
-q_elem = 6e6
+q_elem = 1e8
 max_temps = {
-    "dumb": 700,
+    "arrivals": 700,
+    "departures": 400,
 }
 
 only_postprocess_video = False  # skip runnign the problem and just make the video for the current setup
 
-apt_data = load_airport(airport, resolution, min_density=min_density)
+apt_data = load_airport(airport, resolution, min_density=min_density, ignore_cases=["dumb"])
+
+# Plot the bounds it generated
+debug_plots(apt_data, out_folder)
 
 cases = apt_data["q_elem"].keys()
 nx, ny, xlim, ylim = (apt_data["num_x"], apt_data["num_y"], apt_data["x_lim"], apt_data["y_lim"])
@@ -41,7 +46,7 @@ for case_name in cases:
     apt_data["q_elem"][case_name] *= q_elem
 
 # ========== Initial condition options ==========
-init = "taxiways"  # can be "uniform", "taxiways", or "circle"
+init = "uniform"  # can be "uniform", "taxiways", or "circle"
 
 if not only_postprocess_video:
     prob = om.Problem()
@@ -56,7 +61,7 @@ if not only_postprocess_video:
             q=apt_data["q_elem"],
             keep_out=apt_data["keep_out"],
             plot=None if use_snopt else [out_folder, 5],
-            clim={case_name: [set_temp, max_temps[case_name]] for case_name in cases},
+            # clim={case_name: [set_temp, max_temps[case_name]] for case_name in cases},
             airport_data=apt_data,
             r=2e-3,
             p=3.0,
@@ -70,8 +75,6 @@ if not only_postprocess_video:
     prob.model.add_design_var("density_dv", lower=apt_data["density_lower"], upper=apt_data["density_upper"])
     for case_name in cases:
         prob.model.add_constraint(f"max_temp_{case_name}", upper=max_temps[case_name])
-
-    os.makedirs(out_folder, exist_ok=True)
 
     prob.driver = om.pyOptSparseDriver(optimizer="IPOPT")
     prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
