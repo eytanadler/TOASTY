@@ -16,21 +16,26 @@ cur_dir = os.path.abspath(os.path.dirname(__file__))
 # USER INPUTS
 out_folder = os.path.join(cur_dir, "ORD_1000w")
 os.makedirs(out_folder, exist_ok=True)
-use_snopt = False
 airport = "ORD"  # set to None to do other problem
 resolution = "1000w"
 min_density = 1e-3  # lower bound on density
+filter_radius = 2e-3
+penalty_exponent = 3.0
+ks_rho = 10.0
+use_smoothstep = False
 
 set_temp = 200.0
 q_elem = 1e8
 max_temps = {
+    "dumb": 3000,
     "arrivals": 600,
     "departures": 350,
+    "arr_and_dep": 700,
 }
 
-only_postprocess_video = False  # skip runnign the problem and just make the video for the current setup
+only_postprocess_video = False  # skip running the problem and just make the video for the current setup
 
-apt_data = load_airport(airport, resolution, min_density=min_density, ignore_cases=["dumb"])
+apt_data = load_airport(airport, resolution, min_density=min_density, ignore_cases=["dumb", "arrivals", "departures"])
 
 # Plot the bounds it generated
 debug_plots(apt_data, out_folder)
@@ -60,13 +65,13 @@ if not only_postprocess_video:
             T_set=apt_data["T_set_node"],
             q=apt_data["q_elem"],
             keep_out=apt_data["keep_out"],
-            plot=None if use_snopt else [out_folder, 5],
+            plot=[out_folder, 5],
             # clim={case_name: [set_temp, max_temps[case_name]] for case_name in cases},
             airport_data=apt_data,
-            r=2e-3,
-            p=3.0,
-            ks_rho=10.0,
-            use_smoothstep=False,
+            r=filter_radius,
+            p=penalty_exponent,
+            ks_rho=ks_rho,
+            use_smoothstep=use_smoothstep,
         ),
         promotes=["*"],
     )
@@ -90,7 +95,35 @@ if not only_postprocess_video:
     prob.driver.opt_settings["limited_memory_max_history"] = 100
     prob.driver.opt_settings["corrector_type"] = "primal-dual"
     prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
-    prob.driver.opt_settings["linear_solver"] = "ma86"
+    prob.driver.opt_settings["linear_solver"] = "ma77"
+
+    # Write data about problem setup to file for reproducibility
+    write_vars = [
+        "out_folder",
+        "airport",
+        "resolution",
+        "min_density",
+        "filter_radius",
+        "penalty_exponent",
+        "ks_rho",
+        "use_smoothstep",
+        "set_temp",
+        "q_elem",
+        "max_temps",
+        "cases",
+        "init",
+    ]
+    with open(os.path.join(out_folder, "problem_variable_values.txt"), "w") as f:
+        f.write("==================================================================\n")
+        f.write("                    RUNSCRIPT VARIABLE VALUES                     \n")
+        f.write("==================================================================\n\n")
+        for var in write_vars:
+            f.write(f"{var}: {globals()[var]}\n")
+        
+        # Optimizer settings
+        f.write(f"\n-------- {prob.driver.options['optimizer']} settings --------\n")
+        for opt_setting in prob.driver.opt_settings.keys():
+            f.write(f"{opt_setting}: {prob.driver.opt_settings[opt_setting]}\n")
 
     prob.setup(mode="rev")
 
