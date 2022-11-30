@@ -16,7 +16,7 @@ dateList = ["11-22", "11-23", "11-25", "11-27", "11-28"]
 def getResultsSAN():
     airport = SanDiego()
 
-    dateList = ["SAN_11_22", "SAN_11_23", "SAN_11_25", "SAN_11_27", "SAN_11_28"]
+    dateList = ["SAN_11_22", "SAN_11_23", "SAN_11_25", "SAN_11_27", "SAN_11_28", "SAN_11_29"]
     arrivalList = []
     departureList = []
 
@@ -31,7 +31,7 @@ def getResultsSAN():
 def getResultsORD():
     airport = Chicago()
 
-    dateList = ["ORD_11_22", "ORD_11_23", "ORD_11_25", "ORD_11_27", "ORD_11_28"]
+    dateList = ["ORD_11_22", "ORD_11_23", "ORD_11_25", "ORD_11_27", "ORD_11_28", "ORD_11_29"]
     arrivalList = []
     departureList = []
 
