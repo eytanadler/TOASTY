@@ -38,6 +38,8 @@ def debug_plots(apt_data, out_dir):
     # ==================== Heat debug plot ====================
     n_cases = len(list(apt_data["q_elem"].keys()))
     fig, axs = plt.subplots(1, n_cases, figsize=(6*n_cases, 8))
+    if n_cases == 1:
+        axs = [axs]
     red_cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#ffffff", "#ff0000"])
 
     for i_case, case in enumerate(apt_data["q_elem"].keys()):
@@ -54,6 +56,8 @@ def debug_plots(apt_data, out_dir):
 
     # ==================== Temp debug plot ====================
     fig, axs = plt.subplots(1, n_cases, figsize=(6*n_cases, 8))
+    if n_cases == 1:
+        axs = [axs]
     blue_cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["#ffffff", "#0000ff"])
 
     for i_case, case in enumerate(apt_data["T_set_node"].keys()):
