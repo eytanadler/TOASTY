@@ -83,6 +83,7 @@ if not only_postprocess_video:
 
     prob.driver = om.pyOptSparseDriver(optimizer="IPOPT")
     prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
+    prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
     prob.driver.opt_settings["output_file"] = os.path.join(out_folder, "IPOPT.out")
     prob.driver.opt_settings["max_iter"] = 5000
     prob.driver.opt_settings["constr_viol_tol"] = 1e-6
