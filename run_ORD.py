@@ -30,7 +30,7 @@ max_temps = {
     "dumb": 3000,
     "arrivals": 600,
     "departures": 350,
-    "arr_and_dep": 700,
+    "arr_and_dep": 800,
 }
 
 only_postprocess_video = False  # skip running the problem and just make the video for the current setup
@@ -85,7 +85,7 @@ if not only_postprocess_video:
     prob.driver.options["debug_print"] = ["objs", "nl_cons", "ln_cons"]  # desvars, nl_cons, ln_cons, objs, totals
     prob.driver.hist_file = os.path.join(out_folder, "opt.hst")
     prob.driver.opt_settings["output_file"] = os.path.join(out_folder, "IPOPT.out")
-    prob.driver.opt_settings["max_iter"] = 5000
+    prob.driver.opt_settings["max_iter"] = 99999
     prob.driver.opt_settings["constr_viol_tol"] = 1e-6
     prob.driver.opt_settings["nlp_scaling_method"] = "gradient-based"
     prob.driver.opt_settings["acceptable_tol"] = 1e-5
@@ -93,10 +93,12 @@ if not only_postprocess_video:
     prob.driver.opt_settings["tol"] = 1e-5
     prob.driver.opt_settings["mu_strategy"] = "adaptive"
     prob.driver.opt_settings["corrector_type"] = "affine"
-    prob.driver.opt_settings["limited_memory_max_history"] = 100
+    prob.driver.opt_settings["limited_memory_max_history"] = 1000
     prob.driver.opt_settings["corrector_type"] = "primal-dual"
     prob.driver.opt_settings["hessian_approximation"] = "limited-memory"
     prob.driver.opt_settings["linear_solver"] = "ma77"
+    prob.driver.opt_settings["gamma_theta"] = 1e-2
+    prob.driver.opt_settings["gamma_phi"] = 1e-2
 
     # Write data about problem setup to file for reproducibility
     write_vars = [
