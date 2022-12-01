@@ -8,11 +8,13 @@ import matplotlib.pyplot as plt
 import matplotlib
 import os
 
+use_pypardiso = False
 try:
-    from pypardiso import spsolve
+    import pypardiso
+    use_pypardiso = True
 except ImportError:
     print("Install pypardiso for faster linear solves, falling back to scipy")
-    from scipy.sparse.linalg import spsolve
+    import scipy.sparse.linalg as splinalg
 
 
 class FEM(om.ImplicitComponent):
@@ -109,6 +111,11 @@ class FEM(om.ImplicitComponent):
         self.F_glob = np.zeros((nx * ny,), dtype=float)
         self._update_global_force()
 
+        # If using pypardiso, assign a solver so it properly caches the
+        # factorized stiffness matrix even when there are multipoint cases
+        if use_pypardiso:
+            self.lin_solver = pypardiso.PyPardisoSolver()
+
         print(f"done in {time() - t_start} sec")
 
         self.plot_counter = -1
@@ -134,7 +141,7 @@ class FEM(om.ImplicitComponent):
         print("solve_nonlinear...", end="")
         t_start = time()
         self._update_global_stiffness(inputs["density"])
-        outputs["temp"] = spsolve(self.K_glob, self.F_glob)
+        outputs["temp"] = self._spsolve(self.K_glob, self.F_glob)
         print(f"done in {time() - t_start} sec")
 
         if self.plot_result:
@@ -229,11 +236,11 @@ class FEM(om.ImplicitComponent):
         if mode == "fwd":
             print("solve_linear fwd...", end="")
             t_start = time()
-            d_outputs["temp"] = spsolve(self.pRpu, d_residuals["temp"])
+            d_outputs["temp"] = self._spsolve(self.pRpu, d_residuals["temp"])
         elif mode == "rev":
             print("solve_linear rev...", end="")
             t_start = time()
-            d_residuals["temp"] = spsolve(self.pRpu, d_outputs["temp"])
+            d_residuals["temp"] = self._spsolve(self.pRpu, d_outputs["temp"])
 
         print(f"done in {time() - t_start} sec")
 
@@ -567,6 +574,15 @@ class FEM(om.ImplicitComponent):
         in the flattened vectors (for example, in the unknown temperature vector).
         """
         return i * self.ny + j
+
+    def _spsolve(self, A, b):
+        """
+        Calls the appropriate sparse linear solver depending on whether Pardiso or SciPy
+        solvers are available.
+        """
+        if use_pypardiso:
+            return pypardiso.spsolve(A, b, solver=self.lin_solver)
+        return splinalg.spsolve(A, b)
 
     @staticmethod
     def _N(xi, eta):

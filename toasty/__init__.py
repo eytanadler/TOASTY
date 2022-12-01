@@ -4,3 +4,4 @@ from .FEM_comp import FEM
 from .SIMP import SIMP
 from .utils import gen_mesh, Mass, LinearDensityFilter, PenalizeDensity, SmoothStep, AvgTemp, MaskKeepOut, Multiply
 from .airport_reader import load_airport
+from .debug_utils import debug_plots
