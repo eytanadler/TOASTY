@@ -1,19 +1,21 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from os import listdir
-from os.path import isfile, join
+from os import listdir, makedirs
+from os.path import isfile, join, dirname
 import tilemapbase as tmb
 import niceplots as nice
+import subprocess
 
 from dataCollection.plotting.plotUtils import extractTrail, openPickle, flightIDString
 
 
 tmb.init(create=True)
-
 t = tmb.tiles.build_OSM_Humanitarian()
 
+mdo_light_blue = "#0caaef"
 
-def plotMap(flightDetails, airport, departure, plotExit=False, show=False):
+
+def plotMap(flightDetails, airport, departure, outFolder, figTitle=None, plotExit=False, showPlot=False):
     """
     Plot the longitude and latitude for a flight on a map of a given airport
 
@@ -26,7 +28,7 @@ def plotMap(flightDetails, airport, departure, plotExit=False, show=False):
     show : bool, optional
         whether to show the plot, by default False, then it saves the figure
     """
-    nice.setRCParams()
+
     flightID = flightIDString(flightDetails)
     latlong, _, _ = extractTrail(flightDetails)
 
@@ -42,10 +44,15 @@ def plotMap(flightDetails, airport, departure, plotExit=False, show=False):
 
     plotter = tmb.Plotter(extent, t, width=1200)
     plotter.plot(ax, t)
+    xlist = []
+    ylist = []
 
     for point in latlong:
         x, y = tmb.project(*point)
-        ax.scatter(x, y, color="black", s=40)
+        xlist.append(x)
+        ylist.append(y)
+
+    ax.plot(xlist, ylist, color="black", alpha=0.5)
 
     if plotExit:
         ex = airport.findBetterExit(flightDetails, departure)
@@ -60,12 +67,169 @@ def plotMap(flightDetails, airport, departure, plotExit=False, show=False):
 
         ax.plot(x, y, color="black")
 
-    plt.title(flightID, fontsize=30)
+    if figTitle == "default":
+        plt.title(flightID, fontsize=30)
+    elif figTitle is None:
+        pass
+    else:
+        plt.title(figTitle, fontsize=30)
 
-    if show:
+    if departure:
+        time = flightDetails["time"]["scheduled"]["departure"]
+        key = "dep"
+    else:
+        time = flightDetails["time"]["scheduled"]["arrival"]
+        key = "arr"
+
+    callsign = flightDetails["identification"]["callsign"]
+
+    if showPlot:
         plt.show()
     else:
-        plt.savefig(f"{flightID}.png")
+        path = join(dirname(__file__), outFolder)
+        plt.savefig(f"{path}/{key}/{time}_{callsign}.png", bbox_inches="tight")
+
+
+def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, justCreateMovie=False):
+    outDirPath = join(dirname(__file__), outFolder)
+
+    if justCreateMovie:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-framerate",
+                "30",
+                "-pattern_type",
+                "glob",
+                "-i",
+                join(outDirPath, "*.png"),
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-vf",
+                "crop=trunc(iw/2)*2:trunc(ih/2)*2",  # handle divisble by 2 errors
+                join(outDirPath, "path_movie.mp4"),
+            ]
+        )
+        exit()
+
+    makedirs(outDirPath, exist_ok=True)
+
+    plotCount = 0
+
+    extent = tmb.Extent.from_lonlat(
+        airport.centerLoc[0] - airport.longRange,
+        airport.centerLoc[0] + airport.longRange,
+        airport.centerLoc[1] - airport.latRange,
+        airport.centerLoc[1] + airport.latRange,
+    )
+    _, ax = plt.subplots(figsize=(32, 18))
+    ax.xaxis.set_visible(False)
+    ax.yaxis.set_visible(False)
+
+    plotter = tmb.Plotter(extent, t, width=1200)
+    plotter.plot(ax, t)
+
+    ax.fill_between([0, 1], [0, 0], [1, 1], transform=ax.transAxes, color="white", alpha=0.5)
+
+    nFiles = 0
+    for folder in flightFolderList:
+        cases = ["arrivals", "departures"]
+        for case in cases:
+            casePath = join(folder, case)
+            files = [f for f in listdir(casePath) if isfile(join(casePath, f))]
+            nFiles += len(files)
+
+    for folder in flightFolderList:
+        cases = ["arrivals", "departures"]
+
+        for case in cases:
+            casePath = join(folder, case)
+            files = [f for f in listdir(casePath) if isfile(join(casePath, f))]
+
+            for file in files:
+                fullName = join(casePath, file)
+                flightDetails = openPickle(fullName)
+
+                if flightDetails is not None:
+                    latlong, _, _ = extractTrail(flightDetails)
+                    xlist = []
+                    ylist = []
+
+                    for point in latlong:
+                        x, y = tmb.project(*point)
+                        xlist.append(x)
+                        ylist.append(y)
+
+                    ax.plot(xlist, ylist, color=mdo_light_blue, alpha=0.002, linewidth=6)
+
+                    path = join(dirname(__file__), outFolder)
+
+                    if not onlyLast:
+                        if plotCount % 67 == 0:
+                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
+
+                    if onlyLast:
+                        if plotCount == nFiles - 1:
+                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
+
+                plotCount += 1
+
+
+def createTrailGIF(airport, flightFolderList, imageFolder, departures, justCreateGIF=False, plotTitle=None):
+
+    outDirPath = join(dirname(__file__), imageFolder)
+    makedirs(outDirPath, exist_ok=True)
+
+    if departures:
+        depPath = join(outDirPath, "dep")
+        makedirs(depPath, exist_ok=True)
+    else:
+        arrPath = join(outDirPath, "arr")
+        makedirs(arrPath, exist_ok=True)
+
+    if departures:
+        caseName = "dep"
+    else:
+        caseName = "arr"
+
+    if justCreateGIF:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-framerate",
+                "60",
+                "-pattern_type",
+                "glob",
+                "-i",
+                join(outDirPath, caseName, "*.png"),
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-vf",
+                "crop=trunc(iw/2)*2:trunc(ih/2)*2",  # handle divisble by 2 errors
+                join(outDirPath, caseName, "path_movie.mp4"),
+            ]
+        )
+
+    else:
+        for folder in flightFolderList:
+            if departures:
+                fullPath = join(folder, "departures")
+            else:
+                fullPath = join(folder, "arrivals")
+
+            # fullPath = join(dirname(__file__), folder)
+            files = [f for f in listdir(fullPath) if isfile(join(fullPath, f))]
+
+            for file in files:
+                fullName = join(fullPath, file)
+                flightDetails = openPickle(fullName)
+
+                if flightDetails is not None:
+                    plotMap(flightDetails, airport, departures, imageFolder, figTitle=plotTitle)
 
 
 def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
