@@ -10,9 +10,6 @@ table = True
 debug = False
 
 
-dateList = ["11-22", "11-23", "11-25", "11-27", "11-28"]
-
-
 def getResultsSAN():
     airport = SanDiego()
 

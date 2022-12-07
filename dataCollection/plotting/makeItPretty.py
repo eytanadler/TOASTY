@@ -201,6 +201,8 @@ def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date
 
     plotter = tmb.Plotter(extent, t, width=1200)
     plotter.plot(ax, t)
+    
+    ax.fill_between([0, 1], [0, 0], [1, 1], transform=ax.transAxes, color="white", alpha=0.3)
 
     normalizedPercent = (exitPercent - np.min(exitPercent)) / (np.max(exitPercent) - np.min(exitPercent))
 
@@ -269,6 +271,8 @@ def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=
 
     plotter = tmb.Plotter(extent, tile_provider=t, width=1200)
     plotter.plot(ax, t)
+    
+    ax.fill_between([0, 1], [0, 0], [1, 1], transform=ax.transAxes, color="white", alpha=0.3)
 
     for i, ex in enumerate(airport.exitLocations):
         long = np.average((ex[0], ex[1]))
