@@ -9,8 +9,9 @@ from dataCollection.plotting.plotUtils import extractTrail, openPickle, flightID
 
 
 tmb.init(create=True)
-
 t = tmb.tiles.build_OSM_Humanitarian()
+
+mdo_light_blue = "#0caaef"
 
 
 def plotMap(flightDetails, airport, departure, plotExit=False, show=False):
@@ -169,7 +170,7 @@ def plotExitLabels(airport, show=False):
         plt.savefig(f"figures/labels_{airport.code}.pdf", dpi=600, bbox_inches="tight")
 
 
-def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date=None):
+def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date=None, title=None, filename=None):
     """
     Plot a heat map (really just some dots representing frequency) on an airport map
     Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
@@ -237,7 +238,7 @@ def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date
             plt.savefig(f"figures/color_{key2}_freq_{airport.code}_{key1}.png", dpi=600, bbox_inches="tight")
 
 
-def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=None):
+def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=None, title=None, filename=None):
     """
     Plot a heat map (really just some dots representing frequency) on an airport map
     Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
@@ -280,7 +281,7 @@ def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=
         else:
             size = 40 * np.log(exitPercent[i]) / np.log(100)
 
-        ax.plot(x, y, marker="o", markersize=size, color="lightcoral", alpha=0.7)
+        ax.plot(x, y, marker="o", markersize=size, color=mdo_light_blue, alpha=0.7)
         # plt.text(x, y, str(i), fontsize=4, ha="center", va="center")
         plt.text(x, y, f"{exitPercent[i]:.1f}", fontsize=4, ha="center", va="center")
 
@@ -291,7 +292,9 @@ def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=
         key1 = "arrivals"
         key2 = "Exit"
 
-    if date is not None:
+    if title is not None:
+        plt.title(title)
+    elif date is not None:
         plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
     else:
         plt.title(f"{key2} frequencies for {airport.code} {key1}")
@@ -299,10 +302,12 @@ def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=
     if show:
         plt.show()
     else:
-        if date is not None:
-            plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches="tight")
+        if filename is not None:
+            plt.savefig(f"figures/{filename}.png", dpi=200, bbox_inches="tight")
+        elif date is not None:
+            plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=200, bbox_inches="tight")
         else:
-            plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}.png", dpi=600, bbox_inches="tight")
+            plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}.png", dpi=200, bbox_inches="tight")
 
 
 def plotAllInFolder(path, airport, departures, plotExit=False):

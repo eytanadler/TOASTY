@@ -21,6 +21,8 @@ def countTotals(
     printTable=False,
     debug=False,
     date=None,
+    title=None,
+    filename=None,
 ):
     """
     _summary_
@@ -68,10 +70,10 @@ def countTotals(
         exitPercent[i] = exitCount[i] / totalMovements * 100
 
     if plotColor:
-        plotFrequenciesColor(airport, exitPercent[0 : airport.nExits], departures, showPlot, date)
+        plotFrequenciesColor(airport, exitPercent[0 : airport.nExits], departures, showPlot, date, title, filename)
 
     if plotSize:
-        plotFrequenciesSize(airport, exitPercent[0 : airport.nExits], departures, showPlot, date)
+        plotFrequenciesSize(airport, exitPercent[0 : airport.nExits], departures, showPlot, date, title, filename)
 
     if printTable:
         tabulateExits(departures, airport, exitCount, exitPercent, totalMovements)
