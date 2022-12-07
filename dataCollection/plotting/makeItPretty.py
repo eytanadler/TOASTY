@@ -15,7 +15,7 @@ t = tmb.tiles.build_OSM_Humanitarian()
 mdo_light_blue = "#0caaef"
 
 
-def plotMap(flightDetails, airport, departure, outFolder, figTitle=None, plotExit=False, showPlot=False):
+def plotMap(flightDetails, airport, departure, outFolder, figTitle=None, plotExit=False, showPlot=False, fileName=None):
     """
     Plot the longitude and latitude for a flight on a map of a given airport
 
@@ -44,6 +44,9 @@ def plotMap(flightDetails, airport, departure, outFolder, figTitle=None, plotExi
 
     plotter = tmb.Plotter(extent, t, width=1200)
     plotter.plot(ax, t)
+
+    ax.fill_between([0, 1], [0, 0], [1, 1], transform=ax.transAxes, color="white", alpha=0.3)
+
     xlist = []
     ylist = []
 
@@ -52,7 +55,7 @@ def plotMap(flightDetails, airport, departure, outFolder, figTitle=None, plotExi
         xlist.append(x)
         ylist.append(y)
 
-    ax.plot(xlist, ylist, color="black", alpha=0.5)
+    ax.plot(xlist, ylist, color=mdo_light_blue, linewidth=6)
 
     if plotExit:
         ex = airport.findBetterExit(flightDetails, departure)
@@ -65,7 +68,7 @@ def plotMap(flightDetails, airport, departure, outFolder, figTitle=None, plotExi
         x = [x1, x2, x3, x4, x1]
         y = [y1, y2, y3, y4, y1]
 
-        ax.plot(x, y, color="black")
+        ax.plot(x, y, color="black", linewidth=5)
 
     if figTitle == "default":
         plt.title(flightID, fontsize=30)
@@ -74,20 +77,17 @@ def plotMap(flightDetails, airport, departure, outFolder, figTitle=None, plotExi
     else:
         plt.title(figTitle, fontsize=30)
 
-    if departure:
-        time = flightDetails["time"]["scheduled"]["departure"]
-        key = "dep"
-    else:
-        time = flightDetails["time"]["scheduled"]["arrival"]
-        key = "arr"
-
     callsign = flightDetails["identification"]["callsign"]
 
     if showPlot:
         plt.show()
     else:
         path = join(dirname(__file__), outFolder)
-        plt.savefig(f"{path}/{key}/{time}_{callsign}.png", bbox_inches="tight")
+
+        if fileName is None:
+            plt.savefig(f"{path}/{callsign}.png", bbox_inches="tight", dpi=200)
+        else:
+            plt.savefig(f"{path}/{fileName}.png", bbox_inches="tight", dpi=200)
 
 
 def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, justCreateMovie=False):
