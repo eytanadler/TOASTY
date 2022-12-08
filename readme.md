@@ -3,6 +3,8 @@
 
 Install with pip.
 
+See the documentation [here](https://tinyurl.com/TOASTYairport).
+
 Try running `run_DTW.py` or `run_ORD.py`.
 If you do not have [pyOptSparse](https://mdolab-pyoptsparse.readthedocs-hosted.com/en/latest/index.html) with IPOPT (with the HSL linear solvers) installed, you will have to change the driver to something else.
 **_NOTE:_** If you are installing IPOPT with the HSL solvers and __not__ the MUMPS linear solver, you will need to change the default IPOPT `"linear_solver"` option in `pyoptsparse/pyIPOPT/pyIPOPT.py` to one of the HSL solvers, such as `"ma86"` for it to run with the default options (otherwise you will need to explicitly set `"linear_solver"` option in every run script).
