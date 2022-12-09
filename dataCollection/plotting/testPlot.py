@@ -1,3 +1,4 @@
+from os import makedirs
 from os.path import join, dirname
 from dataCollection.airports.SanDiego import SanDiego
 from dataCollection.airports.Chicago import Chicago
@@ -9,6 +10,8 @@ from dataCollection.plotting.makeItPretty import (
     plotFrequenciesColor,
     plotFrequenciesSize,
     extractTrail,
+    createTrailGIF,
+    plotMultipleTrails,
 )
 
 # departurePath = join(dirname(__file__), "../actualData/departures")
@@ -61,7 +64,54 @@ from dataCollection.plotting.makeItPretty import (
 # # plotMap(flightDetails, airport, True)
 
 
-airport = Chicago()
+# airport = Chicago()
+airport = SanDiego()
+outFolder = "allImagesSAN"
+
+base = "../actualData/results"
+fullBase = join(dirname(__file__), base)
+# folders = [
+#     "ORD_11_22",
+#     "ORD_11_23",
+#     "ORD_11_25",
+#     "ORD_11_27",
+#     "ORD_11_28",
+#     "ORD_11_29",
+#     "ORD_11_30",
+#     "ORD_12_01",
+#     "ORD_12_02",
+#     "ORD_12_03",
+#     "ORD_12_06",
+# ]
+folders = [
+    "SAN_11_22",
+    "SAN_11_23",
+    "SAN_11_25",
+    "SAN_11_27",
+    "SAN_11_28",
+    "SAN_11_29",
+    "SAN_11_30",
+    "SAN_12_01",
+    "SAN_12_02",
+    "SAN_12_03",
+]
+
+for i, folder in enumerate(folders):
+    folders[i] = join(fullBase, folder)
+
+plotMultipleTrails(airport, folders, outFolder, onlyLast=False, justCreateMovie=False)
+
+# base = "../actualData/results"
+# fullBase = join(dirname(__file__), base)
+# folders = ["ORD_11_22", "ORD_11_23"]
+
+# for i, folder in enumerate(folders):
+#     folders[i] = join(fullBase, folder)t
+
+# plotMultipleTrails(airport, folders, outFolder, departures=False, justCreateGIF=True)
+
+
+# plotExitBoxes(airport, plotAll=True, show=False)
 # path = join(dirname(__file__), "../actualData/11_21_new_new/")
 # arrivalPath = join(path, "arrivals")
 # plotAllInFolder(arrivalPath, airport, False, plotExit=True)
@@ -70,9 +120,9 @@ airport = Chicago()
 
 # # plotExitBoxes(airport, plotAll=True, exitList=None, show=False)
 
-file = "BR633_ORD_to_TPE"
-path = join(dirname(__file__), "../actualData/11_21_new_new_new/")
-arrivalPath = join(path, "departures")
-filePath = join(arrivalPath, file)
-flightDetails = openPickle(filePath)
-plotMap(flightDetails, airport, departure=False, plotExit=True, show=True)
+# file = "BR633_ORD_to_TPE"
+# path = join(dirname(__file__), "../actualData/11_21_new_new_new/")
+# arrivalPath = join(path, "departures")
+# filePath = join(arrivalPath, file)
+# flightDetails = openPickle(filePath)
+# plotMap(flightDetails, airport, departure=False, plotExit=True, show=True)
