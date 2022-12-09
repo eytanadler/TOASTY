@@ -3,7 +3,6 @@ import numpy as np
 from os import listdir, makedirs
 from os.path import isfile, join, dirname
 import tilemapbase as tmb
-import niceplots as nice
 import subprocess
 
 from dataCollection.plotting.plotUtils import extractTrail, openPickle, flightIDString
