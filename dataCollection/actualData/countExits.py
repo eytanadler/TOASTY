@@ -2,13 +2,7 @@ import numpy as np
 from tabulate import tabulate
 from os import listdir
 from os.path import isfile, join, dirname
-from dataCollection.plotting.makeItPretty import (
-    openPickle,
-    extractTrail,
-    plotMap,
-    plotFrequenciesColor,
-    plotFrequenciesSize,
-)
+from dataCollection.plotting.plotting import openPickle, plotMap, plotFrequenciesColor, plotFrequenciesSize
 
 
 def countTotals(
@@ -25,21 +19,37 @@ def countTotals(
     filename=None,
 ):
     """
-    _summary_
+    Count the number of aircraft using a given runway exit/entrance for files in a folder/set of folders
 
     Parameters
     ----------
-    folderPath : _type_
-        _description_
-    airport : _type_
-        _description_
+    folderList : list of strings
+        Set of folders to look in for aircraft data files
+    airport : airport class
+        Airport used here
+    departures : bool, optional
+        Whether this case is departures or arrivals, by default True
+    plotColor : bool, optional
+        Whether to plot a heat map by color, by default False
+    plotSize : bool, optional
+        Whether to plot a heat map by size, by default False
+    showPlot : bool, optional
+        Whether to show the map or save it, by default False
+    printTable : bool, optional
+        Whether to print the final data or not, by default False
     debug : bool, optional
-        _description_, by default False
+        Send the counting into debug mode, by default False
+    date : string, optional
+        Date string to use as a figure title, by default None
+    title : string, optional
+        Custom title to override, by default None
+    filename : string, optional
+        Custome filename to override, by default None
 
     Returns
     -------
-    _type_
-        _description_
+    list, list
+        lists of exis used by counts and by percentage
     """
     exitCount = np.zeros(airport.nExits + 1)
     exitPercent = np.zeros(airport.nExits + 1)
@@ -83,16 +93,20 @@ def countTotals(
 
 def tabulateExits(departures, airport, exitCount, exitPercent, totalMovements):
     """
-    _summary_
+    Print a nice table of the exits/entrances used given some data
 
     Parameters
     ----------
-    category : _type_
-        _description_
-    airport : _type_
-        _description_
-    exitCount : _type_
-        _description_
+    departures : bool
+        Whether this is departures or arrivals
+    airport : airport class
+        Which airport is used
+    exitCount : list
+        Raw number of exits/entrances used
+    exitPercent : list
+        Exits/entrances used as percent total
+    totalMovements : int
+        Total aircraft seen for this case so we don't have to recalculate here
     """
     table = []
 

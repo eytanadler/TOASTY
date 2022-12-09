@@ -14,18 +14,30 @@ t = tmb.tiles.build_OSM_Humanitarian()
 mdo_light_blue = "#0caaef"
 
 
-def plotMap(flightDetails, airport, departure, outFolder, figTitle=None, plotExit=False, showPlot=False, fileName=None):
+def plotMap(
+    flightDetails, airport, departure, outFolder=None, figTitle=None, plotExit=False, showPlot=False, fileName=None
+):
     """
-    Plot the longitude and latitude for a flight on a map of a given airport
+    Plot the trail of a flight on an airport map
 
     Parameters
     ----------
-    flightDetails : dict
-        dictionary of all details on flight
-    airport : Airport class
-        airport being studied for this case
-    show : bool, optional
-        whether to show the plot, by default False, then it saves the figure
+    flightDetails : flightDetails object
+        comes from pickle file or directly from FlightRadar24API
+    airport : airport class
+        airport used here
+    departure : bool
+        whether this is an arrival or departure
+    outFolder: string, optional
+        Folder to save a the image in, by default None
+    figTitle : string, optional
+        Figure title to override auto generated, by default None
+    plotExit : bool, optional
+        Whether to plot exit/entrance aircraft takes, by default False
+    showPlot : bool, optional
+        Whether to show plot or save figure, by default False
+    fileName : string, optional
+        File name to override auto generated, by default None
     """
 
     flightID = flightIDString(flightDetails)
@@ -90,8 +102,25 @@ def plotMap(flightDetails, airport, departure, outFolder, figTitle=None, plotExi
 
 
 def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, justCreateMovie=False):
+    """
+    Plot multiple trails on one airport map
+
+    Parameters
+    ----------
+    airport : airport class
+        airport to pull from
+    flightFolderList : list of strings
+        Folders containing arrival and departure data
+    outFolder : string
+        folder to save output files in
+    onlyLast : bool, optional
+        whether to only create the last image, by default False
+    justCreateMovie : bool, optional
+        whether to just create the movie from the images, by default False
+    """
     outDirPath = join(dirname(__file__), outFolder)
 
+    # just make the movie from the existing images and exit
     if justCreateMovie:
         subprocess.run(
             [
@@ -117,6 +146,7 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
 
     plotCount = 0
 
+    # set up the figure and only plot stuff on that one figure - do not create multiple figures to save time
     extent = tmb.Extent.from_lonlat(
         airport.centerLoc[0] - airport.longRange,
         airport.centerLoc[0] + airport.longRange,
@@ -132,6 +162,7 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
 
     ax.fill_between([0, 1], [0, 0], [1, 1], transform=ax.transAxes, color="white", alpha=0.5)
 
+    # count how many files we have, we need this if we want to only save the last image
     nFiles = 0
     for folder in flightFolderList:
         cases = ["arrivals", "departures"]
@@ -140,6 +171,10 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
             files = [f for f in listdir(casePath) if isfile(join(casePath, f))]
             nFiles += len(files)
 
+    # go through multiple folders, assume folder structure of
+    # --some name
+    # ----arrivals
+    # ----departures
     for folder in flightFolderList:
         cases = ["arrivals", "departures"]
 
@@ -147,10 +182,12 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
             casePath = join(folder, case)
             files = [f for f in listdir(casePath) if isfile(join(casePath, f))]
 
+            # open every flight file and get the data out
             for file in files:
                 fullName = join(casePath, file)
                 flightDetails = openPickle(fullName)
 
+                # if flightDetails is None then openPickle ran into an issue, skip this file
                 if flightDetails is not None:
                     latlong, _, _ = extractTrail(flightDetails)
                     xlist = []
@@ -161,14 +198,17 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
                         xlist.append(x)
                         ylist.append(y)
 
+                    # plot the trail on top of the existing stuff
                     ax.plot(xlist, ylist, color=mdo_light_blue, alpha=0.002, linewidth=6)
 
                     path = join(dirname(__file__), outFolder)
 
+                    # save it as a new file
                     if not onlyLast:
                         if plotCount % 67 == 0:
                             plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
 
+                    # we might only want the last file to save time
                     if onlyLast:
                         if plotCount == nFiles - 1:
                             plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
@@ -233,17 +273,20 @@ def createTrailGIF(airport, flightFolderList, imageFolder, departures, justCreat
 
 def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
     """
-    Plot the bounding box enclosing a runway exit on top of the map
+    Plot the exits or a subset on top of an airport map. Useful for debugging lat/log
 
     Parameters
     ----------
-    exitList : array
-        list of which exit boxes to plot
-    airport : Airport class
-        airport being studied for this case
+    airport : airport class
+        airport to grab exits for
+    plotAll : bool, optional
+        whether to plot all the exits, by default False
+    exitList : list of ints, optional
+        Subset of exits if you don't want all of them to be plotted, by default None
     show : bool, optional
-        whether to show the plot, by default False, then it saves the figure
+        whether to show the plot or save the figure, by default False
     """
+
     extent = tmb.Extent.from_lonlat(
         airport.centerLoc[0] - airport.longRange,
         airport.centerLoc[0] + airport.longRange,
@@ -342,15 +385,20 @@ def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date
     ----------
     airport : Airport class
         airport being studied for this case
-    exitPercent : list
-        Percentages of aircraft using each exit
-    dateString : string
-        date this data is from
+    exitPercent : list of doubles
+        Percentages of aircraft using each exit/entrance
     departures : bool, optional
-        whether this data is from departing aircraft, used for titles, by default True
+        whether this case is departures or arrivals, by default True
     show : bool, optional
-        whether to show the plot, by default False, then it saves the figure
+        whether to show the plot or save to a file, by default False
+    date : string, optional
+        date this data is from, by default None
+    title : string, optional
+        override the auto generated figure title, by default None
+    filename : string, optional
+        override the auto generated filename, by default None
     """
+
     extent = tmb.Extent.from_lonlat(
         airport.centerLoc[0] - airport.longRange,
         airport.centerLoc[0] + airport.longRange,
@@ -385,7 +433,9 @@ def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date
         key1 = "arrivals"
         key2 = "Entrance"
 
-    if date is not None:
+    if title is not None:
+        plt.title(title)
+    elif date is not None:
         plt.title(f"{key2} frequencies for {airport.code} {key1} on {date}")
     else:
         plt.title(f"{key2} frequencies for {airport.code} {key1}")
@@ -396,7 +446,9 @@ def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date
     if show:
         plt.show()
     else:
-        if date is not None:
+        if filename is not None:
+            plt.savefig(f"figures/{filename}.png", dpi=200, bbox_inches="tight")
+        elif date is not None:
             plt.savefig(f"figures/color_{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches="tight")
         else:
             plt.savefig(f"figures/color_{key2}_freq_{airport.code}_{key1}.png", dpi=600, bbox_inches="tight")
@@ -405,22 +457,25 @@ def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date
 def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=None, title=None, filename=None):
     """
     Plot a heat map (really just some dots representing frequency) on an airport map
-    Normalize the frequency at which the aircraft use the exits so the full range of the colormap is used
-    This seemed easier than adjusting the colorbar bounds
 
     Parameters
     ----------
     airport : Airport class
         airport being studied for this case
-    exitPercent : list
-        Percentages of aircraft using each exit
-    dateString : string
-        date this data is from
+    exitPercent : list of doubles
+        Percentages of aircraft using each exit/entrance
     departures : bool, optional
-        whether this data is from departing aircraft, used for titles, by default True
+        whether this case is departures or arrivals, by default True
     show : bool, optional
-        whether to show the plot, by default False, then it saves the figure
+        whether to show the plot or save to a file, by default False
+    date : string, optional
+        date this data is from, by default None
+    title : string, optional
+        override the auto generated figure title, by default None
+    filename : string, optional
+        override the auto generated filename, by default None
     """
+
     extent = tmb.Extent.from_lonlat(
         airport.centerLoc[0] - airport.longRange,
         airport.centerLoc[0] + airport.longRange,
@@ -478,14 +533,18 @@ def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=
 
 def plotAllInFolder(path, airport, departures, plotExit=False):
     """
-    plot all the flight files at a path to debug
+    Plot all the flight trails in a folder to debug
 
     Parameters
     ----------
     path : string
-        path to folder of files
-    airport : Airport class
-        airport being studied for this case
+        path to folder
+    airport : airport class
+        airport used for those files
+    departures : bool
+        whether this is a departures case
+    plotExit : bool, optional
+        whether to plot the exit that has been detected, by default False
     """
     departureFiles = [f for f in listdir(path) if isfile(join(path, f))]
 

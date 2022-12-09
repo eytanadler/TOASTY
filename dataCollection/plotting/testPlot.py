@@ -2,7 +2,7 @@ from os import makedirs
 from os.path import join, dirname
 from dataCollection.airports.SanDiego import SanDiego
 from dataCollection.airports.Chicago import Chicago
-from dataCollection.plotting.makeItPretty import (
+from dataCollection.plotting.plotting import (
     plotAllInFolder,
     openPickle,
     plotMap,
