@@ -1,8 +1,8 @@
-from dataCollection.actualData.countExits import countTotals, tabulateExits
+from dataCollection.actualData.countExits import countTotals
 from dataCollection.actualData.catchFlights import catchArrivals, catchDepartures
 from dataCollection.airports.SanDiego import SanDiego
-from dataCollection.airports.Detroit import Detroit
 from dataCollection.airports.Chicago import Chicago
+import os
 
 
 color = False
@@ -13,67 +13,67 @@ table = True
 
 
 def testCatch():
-    airport = SanDiego()
-    catchDepartures(airport, 3600)
-    catchArrivals(airport, 1000)
+    airport = Chicago()
+    # catchArrivals(airport, 1000, os.path.join(os.path.dirname(__file__), "test"))
+    catchDepartures(airport, 3600, os.path.join(os.path.dirname(__file__), "test"))
 
 
 def testExitsSAN():
     airport = SanDiego()
 
-    exitCountA, exitPercentA = countTotals(
-        folderPath="results/11_7_SAN/arrivals",
+    countTotals(
+        folderList=["results/SAN_11_29/arrivals"],
         airport=airport,
         departures=False,
         plotColor=color,
         plotSize=size,
         showPlot=show,
-        plotString="11-7",
         printTable=table,
         debug=debug,
+        date="11-29",
     )
     print()
-    exitCountD, exitPercentD = countTotals(
-        folderPath="results/11_7_SAN/departures",
+    countTotals(
+        folderList=["results/SAN_11_29/departures"],
         airport=airport,
         departures=True,
         plotColor=color,
         plotSize=size,
         showPlot=show,
-        plotString="11-7",
         printTable=table,
         debug=debug,
+        date="11-29",
     )
 
 
 def testExitsORD():
     airport = Chicago()
 
-    exitCountA, exitPercentA = countTotals(
-        folderPath="11_21_real/arrivals",
+    countTotals(
+        folderList=["results/ORD_11_29/arrivals"],
         airport=airport,
         departures=False,
         plotColor=color,
         plotSize=size,
         showPlot=show,
-        plotString="11-21,2",
         printTable=table,
         debug=debug,
+        date="11-29",
     )
     print()
-    exitCountD, exitPercentD = countTotals(
-        folderPath="11_21_real/departures",
+    countTotals(
+        folderList=["results/ORD_11_29/departures"],
         airport=airport,
         departures=True,
         plotColor=color,
         plotSize=size,
         showPlot=show,
-        plotString="11-21,2",
         printTable=table,
         debug=debug,
+        date="11-29",
     )
 
 
 # testExitsSAN()
-# testExitsDTW()
-testExitsORD()
+# testExitsORD()
+testCatch()

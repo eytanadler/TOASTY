@@ -44,10 +44,17 @@ def openPickle(fileName):
         dictionary of all details on flight
     """
     flightFile = open(fileName, "rb")
-    flightDetails = pkl.load(flightFile)
-    flightFile.close()
+    try:
+        flightDetails = pkl.load(flightFile)
+        flightFile.close()
 
-    if not isinstance(flightDetails, dict):
+        if not isinstance(flightDetails, dict) or len(flightDetails) == 1:
+            flightDetails = None
+
+    except EOFError:
+        flightDetails = None
+
+    except pkl.UnpicklingError:
         flightDetails = None
 
     return flightDetails

@@ -4,7 +4,6 @@ import pickle as pkl
 import os
 import numpy as np
 import logging
-from dataCollection.plotting.makeItPretty import extractTrail
 
 
 # initialize FlightRadar24 API
@@ -21,6 +20,8 @@ def flightIDString(flight, airport, outFolder):
         from FlightRadar24 API representing a single flight
     airport : Airport class
         airport being studied for this case
+    outFolder : string
+        folder to save output files in
 
     Returns
     -------
@@ -59,6 +60,8 @@ def saveFlightInfo(flight, airport, outFolder):
         from FlightRadar24 API representing a single flight
     airport : Airport class
         airport being studied for this case
+    outFolder : string
+        folder to save output files in
     """
     flightDetails = fr_api.get_flight_details(flight.id)
 
@@ -108,6 +111,8 @@ def catchDepartures(airport, openTime, outFolder, refreshRate=120):
          airport being studied for this case
     openTime : int
         time to leave this running for
+    outFolder : string
+        folder to save output files in
     refreshRate : int, optional
         rate at which to check for new flights, by default 120 (seconds)
     """
@@ -180,6 +185,8 @@ def catchArrivals(airport, openTime, outFolder, refreshRate=60):
          airport being studied for this case
     openTime : int
         time to leave this running for
+    outFolder : string
+        folder to save output files in
     refreshRate : int, optional
         rate at which to check for new flights, by default 60 (seconds)
     """

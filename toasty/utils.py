@@ -230,9 +230,9 @@ class SmoothStep(om.ExplicitComponent):
         self.options.declare("num_x", types=int, desc="Number of mesh coordinates in the x direction")
         self.options.declare("num_y", types=int, desc="Number of mesh coordinates in the y direction")
         self.options.declare("n", types=int, default=3, desc="Polynomial order of the smoothstep")
-        self.options.declare("x_min", types=float, default=0.25, desc="Step start x value")
-        self.options.declare("x_max", types=float, default=0.75, desc="Step end x value")
-        self.options.declare("y_min", types=float, default=1e-3, desc="Step minimum value")
+        self.options.declare("x_min", types=float, default=0.0, desc="Step start x value")
+        self.options.declare("x_max", types=float, default=1.0, desc="Step end x value")
+        self.options.declare("y_min", types=float, default=0.0, desc="Step minimum value")
         self.options.declare("y_max", types=float, default=1.0, desc="Step maximum value")
 
     def setup(self):
@@ -422,12 +422,12 @@ class Multiply(om.ExplicitComponent):
         First thingy.
     B : float
         Second thingy.
-    
+
     Outputs
     -------
     product : float
         Element-wise multiplication of first and second thingies.
-    
+
     Options
     -------
     vec_size : int
@@ -449,7 +449,7 @@ class Multiply(om.ExplicitComponent):
 
     def computes(self, inputs, outputs):
         outputs["product"] = inputs["A"] * inputs["B"]
-    
+
     def compute_partials(self, inputs, J):
         J["product", "A"] = inputs["B"]
         J["product", "B"] = inputs["A"]
