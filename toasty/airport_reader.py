@@ -4,7 +4,7 @@ import glob
 import numpy as np
 
 
-def load_airport(airport_name, resolution, min_density=1e-3):
+def load_airport(airport_name, resolution, min_density=1e-3, ignore_cases=[]):
     """
     Reads in airport data from TOASTY's database of airports (which is
     very limited because we have to make them all manually).
@@ -82,6 +82,8 @@ def load_airport(airport_name, resolution, min_density=1e-3):
             raise IndexError
         for app in f:
             app_name = app.split("thermals_")[-1].split(".")[0]
+            if app_name in ignore_cases:
+                continue
             im["thermals"][app_name] = np.flipud(np.array(Image.open(app).convert("RGB"))).astype(int)
     except IndexError:  # glob would throw an index error because it'd return an empty list
         raise FileNotFoundError(
@@ -160,7 +162,7 @@ def load_airport(airport_name, resolution, min_density=1e-3):
 
     # Runways and buildings can't conduct heat (heat-generating elements must, which is fixed later)
     for k in ["density_upper", "density_lower"]:
-        data[k][data["runways"] > 0.99] = 0.0
+        # data[k][data["runways"] > 0.99] = 0.0  modified so runways act no differently than other space
         data[k][data["buildings"] > 0.99] = 0.0
 
     # Heat-generating elements must be conductive
