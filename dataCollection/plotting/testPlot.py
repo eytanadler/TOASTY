@@ -14,8 +14,8 @@ from dataCollection.plotting.plotting import (
     plotMultipleTrails,
 )
 
-# plotExitBoxes(SanDiego(), plotAll=True)
-# plotExitBoxes(Chicago(), plotAll=True)
+plotExitBoxes(SanDiego(), plotAll=True)
+plotExitBoxes(Chicago(), plotAll=True)
 
 # departurePath = join(dirname(__file__), "../actualData/departures")
 # airport = SanDiego()

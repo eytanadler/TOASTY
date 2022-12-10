@@ -12,6 +12,8 @@ tmb.init(create=True)
 t = tmb.tiles.build_OSM_Humanitarian()
 
 mdo_light_blue = "#0caaef"
+dpi = 150
+ext = "png"
 
 
 def plotMap(
@@ -96,9 +98,9 @@ def plotMap(
         path = join(dirname(__file__), outFolder)
 
         if fileName is None:
-            plt.savefig(f"{path}/{callsign}.png", bbox_inches="tight", dpi=200)
+            plt.savefig(f"{path}/{callsign}.{ext}", bbox_inches="tight", dpi=dpi)
         else:
-            plt.savefig(f"{path}/{fileName}.png", bbox_inches="tight", dpi=200)
+            plt.savefig(f"{path}/{fileName}.{ext}", bbox_inches="tight", dpi=dpi)
 
 
 def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, justCreateMovie=False):
@@ -207,12 +209,12 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
                     # save it as a new file
                     if not onlyLast:
                         if plotCount % 67 == 0:
-                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200, transparent=True)
+                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=dpi, transparent=True)
 
                     # we might only want the last file to save time
                     if onlyLast:
                         if plotCount == nFiles - 1:
-                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200, transparent=True)
+                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=dpi, transparent=True)
 
                 plotCount += 1
 
@@ -333,7 +335,7 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
     if show:
         plt.show()
     else:
-        plt.savefig(f"figures/bounds_{airport.code}.png", dpi=600, bbox_inches="tight", transparent=True)
+        plt.savefig(f"figures/bounds_{airport.code}.{ext}", dpi=dpi, bbox_inches="tight", transparent=True)
 
 
 def plotExitLabels(airport, show=False):
@@ -374,7 +376,7 @@ def plotExitLabels(airport, show=False):
     if show:
         plt.show()
     else:
-        plt.savefig(f"figures/labels_{airport.code}.pdf", dpi=600, bbox_inches="tight", transparent=True)
+        plt.savefig(f"figures/labels_{airport.code}.{ext}", dpi=dpi, bbox_inches="tight", transparent=True)
 
 
 def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date=None, title=None, filename=None):
@@ -449,11 +451,11 @@ def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date
         plt.show()
     else:
         if filename is not None:
-            plt.savefig(f"figures/{filename}.png", dpi=200, bbox_inches="tight")
+            plt.savefig(f"figures/{filename}.{ext}", dpi=dpi, bbox_inches="tight")
         elif date is not None:
-            plt.savefig(f"figures/color_{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=600, bbox_inches="tight")
+            plt.savefig(f"figures/color_{key2}_freq_{airport.code}_{key1}_{date}.{ext}", dpi=dpi, bbox_inches="tight")
         else:
-            plt.savefig(f"figures/color_{key2}_freq_{airport.code}_{key1}.png", dpi=600, bbox_inches="tight")
+            plt.savefig(f"figures/color_{key2}_freq_{airport.code}_{key1}.{ext}", dpi=dpi, bbox_inches="tight")
 
 
 def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=None, title=None, filename=None):
@@ -527,14 +529,14 @@ def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=
         plt.show()
     else:
         if filename is not None:
-            plt.savefig(f"figures/{filename}.png", dpi=600, bbox_inches="tight", transparent=True)
+            plt.savefig(f"figures/{filename}.{ext}", dpi=dpi, bbox_inches="tight", transparent=True)
         elif date is not None:
             plt.savefig(
-                f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=200, bbox_inches="tight", transparent=True
+                f"figures/{key2}_freq_{airport.code}_{key1}_{date}.{ext}", dpi=dpi, bbox_inches="tight", transparent=True
             )
         else:
             plt.savefig(
-                f"figures/{key2}_freq_{airport.code}_{key1}.png", dpi=200, bbox_inches="tight", transparent=True
+                f"figures/{key2}_freq_{airport.code}_{key1}.{ext}", dpi=dpi, bbox_inches="tight", transparent=True
             )
 
 
