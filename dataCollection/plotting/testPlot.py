@@ -14,6 +14,9 @@ from dataCollection.plotting.plotting import (
     plotMultipleTrails,
 )
 
+# plotExitBoxes(SanDiego(), plotAll=True)
+# plotExitBoxes(Chicago(), plotAll=True)
+
 # departurePath = join(dirname(__file__), "../actualData/departures")
 # airport = SanDiego()
 # plotAllInFolder(departurePath, airport)
@@ -64,26 +67,27 @@ from dataCollection.plotting.plotting import (
 # # plotMap(flightDetails, airport, True)
 
 
-# airport = Chicago()
-airport = SanDiego()
-outFolder = "allImagesSAN"
+airport1 = Chicago()
+airport2 = SanDiego()
+outFolder1 = "allImagesORD"
+outFolder2 = "allImagesSAN"
 
 base = "../actualData/results"
 fullBase = join(dirname(__file__), base)
-# folders = [
-#     "ORD_11_22",
-#     "ORD_11_23",
-#     "ORD_11_25",
-#     "ORD_11_27",
-#     "ORD_11_28",
-#     "ORD_11_29",
-#     "ORD_11_30",
-#     "ORD_12_01",
-#     "ORD_12_02",
-#     "ORD_12_03",
-#     "ORD_12_06",
-# ]
-folders = [
+folders1 = [
+    "ORD_11_22",
+    "ORD_11_23",
+    "ORD_11_25",
+    "ORD_11_27",
+    "ORD_11_28",
+    "ORD_11_29",
+    "ORD_11_30",
+    "ORD_12_01",
+    "ORD_12_02",
+    "ORD_12_03",
+    "ORD_12_06",
+]
+folders2 = [
     "SAN_11_22",
     "SAN_11_23",
     "SAN_11_25",
@@ -96,10 +100,15 @@ folders = [
     "SAN_12_03",
 ]
 
-for i, folder in enumerate(folders):
-    folders[i] = join(fullBase, folder)
+for i, folder in enumerate(folders1):
+    folders1[i] = join(fullBase, folder)
 
-plotMultipleTrails(airport, folders, outFolder, onlyLast=False, justCreateMovie=False)
+plotMultipleTrails(airport1, folders1, outFolder1, onlyLast=True, justCreateMovie=False)
+
+for i, folder in enumerate(folders2):
+    folders2[i] = join(fullBase, folder)
+
+plotMultipleTrails(airport2, folders2, outFolder2, onlyLast=True, justCreateMovie=False)
 
 # base = "../actualData/results"
 # fullBase = join(dirname(__file__), base)

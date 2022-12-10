@@ -42,7 +42,7 @@ def getResultsSAN():
         table,
         debug,
         date=None,
-        title="Arrivals",
+        title="",
         filename="allSANarrivals",
     )
     countTotals(
@@ -55,7 +55,7 @@ def getResultsSAN():
         table,
         debug,
         date=None,
-        title="Departures",
+        title="",
         filename="allSANdepartures",
     )
 
@@ -93,7 +93,7 @@ def getResultsORD():
         table,
         debug,
         date=None,
-        title="Arrivals",
+        title="",
         filename="allORDarrivals",
     )
     countTotals(
@@ -106,7 +106,7 @@ def getResultsORD():
         table,
         debug,
         date=None,
-        title="Departures",
+        title="",
         filename="allORDdepartures",
     )
 

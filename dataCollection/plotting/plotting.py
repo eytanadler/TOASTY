@@ -157,6 +157,7 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
 
+    ax.axis("off")
     plotter = tmb.Plotter(extent, t, width=1200)
     plotter.plot(ax, t)
 
@@ -206,12 +207,12 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
                     # save it as a new file
                     if not onlyLast:
                         if plotCount % 67 == 0:
-                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
+                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200, transparent=True)
 
                     # we might only want the last file to save time
                     if onlyLast:
                         if plotCount == nFiles - 1:
-                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
+                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200, transparent=True)
 
                 plotCount += 1
 
@@ -297,6 +298,7 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
     ax.xaxis.set_visible(False)
     ax.yaxis.set_visible(False)
 
+    ax.axis("off")
     plotter = tmb.Plotter(extent, t, width=1200)
     plotter.plot(ax, t)
 
@@ -326,12 +328,12 @@ def plotExitBoxes(airport, plotAll=False, exitList=None, show=False):
 
             ax.plot(x, y, color="black", linewidth=0.75)
 
-    plt.title(f"Taxiway exit/entrance bounds for {airport.code}")
+    # plt.title(f"Runway exit/entrance bounds for {airport.code}", fontsize=10)
 
     if show:
         plt.show()
     else:
-        plt.savefig(f"figures/bounds_{airport.code}.pdf", dpi=600, bbox_inches="tight")
+        plt.savefig(f"figures/bounds_{airport.code}.png", dpi=600, bbox_inches="tight", transparent=True)
 
 
 def plotExitLabels(airport, show=False):
@@ -372,7 +374,7 @@ def plotExitLabels(airport, show=False):
     if show:
         plt.show()
     else:
-        plt.savefig(f"figures/labels_{airport.code}.pdf", dpi=600, bbox_inches="tight")
+        plt.savefig(f"figures/labels_{airport.code}.pdf", dpi=600, bbox_inches="tight", transparent=True)
 
 
 def plotFrequenciesColor(airport, exitPercent, departures=True, show=False, date=None, title=None, filename=None):
@@ -489,6 +491,7 @@ def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=
     plotter = tmb.Plotter(extent, tile_provider=t, width=1200)
     plotter.plot(ax, t)
 
+    ax.axis("off")
     ax.fill_between([0, 1], [0, 0], [1, 1], transform=ax.transAxes, color="white", alpha=0.3)
 
     for i, ex in enumerate(airport.exitLocations):
@@ -524,11 +527,15 @@ def plotFrequenciesSize(airport, exitPercent, departures=True, show=False, date=
         plt.show()
     else:
         if filename is not None:
-            plt.savefig(f"figures/{filename}.png", dpi=200, bbox_inches="tight")
+            plt.savefig(f"figures/{filename}.png", dpi=600, bbox_inches="tight", transparent=True)
         elif date is not None:
-            plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=200, bbox_inches="tight")
+            plt.savefig(
+                f"figures/{key2}_freq_{airport.code}_{key1}_{date}.png", dpi=200, bbox_inches="tight", transparent=True
+            )
         else:
-            plt.savefig(f"figures/{key2}_freq_{airport.code}_{key1}.png", dpi=200, bbox_inches="tight")
+            plt.savefig(
+                f"figures/{key2}_freq_{airport.code}_{key1}.png", dpi=200, bbox_inches="tight", transparent=True
+            )
 
 
 def plotAllInFolder(path, airport, departures, plotExit=False):
