@@ -119,6 +119,8 @@ def plotMultipleTrails(airport, flightFolderList, outDirPath, onlyLast=False, ju
         whether to just create the movie from the images, by default False
     alpha : double, optional
         transparancy for trails - use larger values when plotting fewer for visibility and smaller values when plotting more for contrast
+    show : bool, optional
+        show the figure instead of saving it. this is only when onlyLast is True because otherwise there could be many figures.
     """
 
     # just make the movie from the existing images and exit
