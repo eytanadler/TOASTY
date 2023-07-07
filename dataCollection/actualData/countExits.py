@@ -55,15 +55,13 @@ def countTotals(
     exitPercent = np.zeros(airport.nExits + 1)
 
     for folder in folderList:
-        fullPath = join(dirname(__file__), folder)
-        departureFiles = [f for f in listdir(fullPath) if isfile(join(fullPath, f))]
+        departureFiles = [f for f in listdir(folder) if isfile(join(folder, f))]
 
         for file in departureFiles:
-            fullName = join(fullPath, file)
-            flightDetails = openPickle(fullName)
+            flightDetails = openPickle(join(folder, file))
 
             if flightDetails is not None:
-                exitCode = airport.findBetterExit(flightDetails, isDeparture=departures)
+                exitCode = airport.findBetterExit(flightDetails=flightDetails, isDeparture=departures)
 
                 if debug:
                     if exitCode is None:

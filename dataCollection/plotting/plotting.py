@@ -101,7 +101,7 @@ def plotMap(
             plt.savefig(f"{path}/{fileName}.png", bbox_inches="tight", dpi=200)
 
 
-def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, justCreateMovie=False):
+def plotMultipleTrails(airport, flightFolderList, outDirPath, onlyLast=False, justCreateMovie=False, alpha=0.002, show=False):
     """
     Plot multiple trails on one airport map
 
@@ -117,8 +117,11 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
         whether to only create the last image, by default False
     justCreateMovie : bool, optional
         whether to just create the movie from the images, by default False
+    alpha : double, optional
+        transparancy for trails - use larger values when plotting fewer for visibility and smaller values when plotting more for contrast
+    show : bool, optional
+        show the figure instead of saving it. this is only when onlyLast is True because otherwise there could be many figures.
     """
-    outDirPath = join(dirname(__file__), outFolder)
 
     # just make the movie from the existing images and exit
     if justCreateMovie:
@@ -199,19 +202,22 @@ def plotMultipleTrails(airport, flightFolderList, outFolder, onlyLast=False, jus
                         ylist.append(y)
 
                     # plot the trail on top of the existing stuff
-                    ax.plot(xlist, ylist, color=mdo_light_blue, alpha=0.002, linewidth=6)
+                    ax.plot(xlist, ylist, color=mdo_light_blue, alpha=alpha, linewidth=6)
 
-                    path = join(dirname(__file__), outFolder)
+                    # path = join(dirname(__file__), outFolder)
 
                     # save it as a new file
                     if not onlyLast:
                         if plotCount % 67 == 0:
-                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
+                            plt.savefig(f"{outDirPath}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
 
                     # we might only want the last file to save time
                     if onlyLast:
                         if plotCount == nFiles - 1:
-                            plt.savefig(f"{path}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
+                            if show:
+                                plt.show()
+                            else:
+                                plt.savefig(f"{outDirPath}/{plotCount:06d}.png", bbox_inches="tight", dpi=200)
 
                 plotCount += 1
 
